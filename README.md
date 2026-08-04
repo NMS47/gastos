@@ -1,76 +1,67 @@
 # Gastos
 
-App de gastos para dos personas. Frontend estático + API en Cloudflare Pages Functions + base D1.
-Todo dentro del plan gratuito: 100.000 requests/día en Functions, 5 GB y 100.000 escrituras/día en D1, sin pausas por inactividad.
+App de gastos para dos personas: un Worker de Cloudflare que sirve el frontend estático
+y atiende la API, con datos en D1. Todo dentro del plan gratuito.
 
 ```
-public/index.html          la app entera (una sola pantalla, 3 pestañas)
-public/manifest.json       para instalarla en el celular
-functions/api/[[path]].js  la API
-schema.sql                 las dos tablas + los medios de pago iniciales
-wrangler.toml              config del proyecto y el binding a D1
+public/index.html    la app (una sola pantalla, 3 pestañas)
+public/manifest.json  para instalarla en el celular
+src/index.js          Worker: sirve /public y atiende /api/*
+schema.sql             las dos tablas + medios de pago iniciales
+wrangler.toml           config y bindings (D1 y assets)
 ```
 
-## Deploy (una sola vez, ~15 minutos)
+## Deploy (una sola vez)
 
-**1. Subir a GitHub**
+**1. Subir a GitHub** (si ya lo hiciste con la versión anterior, solo hace falta
+reemplazar los archivos viejos por estos y pushear de nuevo).
 
-```bash
-cd gastos-app
-git init && git add . && git commit -m "gastos"
-git remote add origin git@github.com:USUARIO/gastos.git
-git push -u origin main
+```powershell
+git add .
+git commit -m "worker con assets"
+git push
 ```
 
-El repo puede ser privado; Cloudflare lo lee igual.
+**2. Crear la base D1** (si ya la creaste antes, saltealo y anotá el ID que ya tenés)
 
-**2. Crear la base**
-
-```bash
+```powershell
 npm install -D wrangler
 npx wrangler login
 npx wrangler d1 create gastos
 ```
 
-Copiá el `database_id` que imprime y pegalo en `wrangler.toml`. Después:
+Copiá el `database_id` que imprime y pegalo en `wrangler.toml`, reemplazando el texto
+`PEGAR-ACA-EL-ID-QUE-DEVUELVE-WRANGLER`. Commiteá y pusheá ese cambio.
 
-```bash
+```powershell
 npx wrangler d1 execute gastos --remote --file=./schema.sql
 ```
 
-**3. Conectar el proyecto**
+**3. Crear el proyecto en Cloudflare**
 
-Cloudflare dashboard → *Workers & Pages* → *Create* → *Pages* → *Connect to Git* → elegí el repo.
-Build command: **vacío**. Build output directory: **`public`**.
-
-Hacé commit del `wrangler.toml` con el `database_id` ya pegado y volvé a pushear; el binding `DB` sale de ahí.
-Si preferís hacerlo a mano: *Settings* → *Bindings* → *D1 database*, variable `DB` → base `gastos`.
+Si ya existe un proyecto viejo tipo "solo assets", borralo. Dashboard →
+**Workers & Pages → Create → Import a repository** (o "Create Worker" → conectar Git) →
+elegí `gastos`. Cloudflare detecta el `wrangler.toml` y usa `main = "src/index.js"`
+y `[assets] directory = "public"` automáticamente — no hace falta tocar build command.
 
 **4. Poner el PIN**
 
-*Settings* → *Variables and Secrets* → agregá `PIN` con el valor que quieran (tipo secret).
-La API rechaza cualquier request sin ese PIN. La app lo pide una vez por teléfono y lo guarda.
-
-Si tenés un dominio propio en Cloudflare, la alternativa mejor es Cloudflare Access (gratis hasta 50 usuarios): login con Google y sólo los mails de ustedes dos entran, sin PIN. Sobre `*.pages.dev` también se puede, pero la configuración es más molesta.
+Dashboard → tu Worker → **Settings → Variables and Secrets → Add** → nombre `PIN`,
+tipo Secret, el valor que quieran. La API rechaza cualquier request sin ese PIN;
+la app lo pide una vez por teléfono y lo guarda.
 
 **5. En el celular**
 
-Abrí `https://gastos.pages.dev` (o tu dominio) → *Compartir* → *Agregar a pantalla de inicio*.
-Queda como una app: se abre en la pestaña de carga con el teclado numérico listo.
+Abrí la URL del Worker → *Compartir* → *Agregar a pantalla de inicio*.
 
 ## Cómo funciona
 
-Un gasto se guarda **una sola vez**, con su fecha de compra. El mes en que impacta se calcula al mostrar:
-
-- Medio de débito, efectivo o billetera → impacta el día de la compra.
-- Tarjeta de crédito → si comprás hasta el día de cierre entra en ese resumen, si no en el siguiente; cada cuota suma un mes más.
-
-Por eso las cuotas no se cargan a mano: cargás "Fravega, $830.000, 12 cuotas, Visa" y aparece sola en los 12 meses que corresponde, marcada `4/12`. Cambiar el día de cierre de una tarjeta recalcula todo lo viejo.
-
-El pago del resumen de la tarjeta **no se carga como gasto**: el total de la tarjeta en un mes ya es la suma de sus cuotas. Si lo cargaras, contarías el mismo gasto dos veces.
+Un gasto se guarda una sola vez, con su fecha de compra. El mes en que impacta se
+calcula al mostrar: débito/efectivo impacta el día de la compra; tarjeta de crédito
+entra en el resumen según el día de cierre, y cada cuota suma un mes más. El pago del
+resumen no se carga como gasto — el total de la tarjeta ya es la suma de sus cuotas.
 
 ## Cambios comunes
 
-- **Categorías**: la lista está en `CATS`, arriba del `<script>` en `index.html`.
-- **Medios de pago**: se agregan y borran desde la app, en la pestaña *Medios*. La estrella marca el que viene seleccionado por defecto.
-- **Ingresos**: no están. Si los querés, hace falta una columna `tipo` en `mov` y sumar/restar según corresponda.
+- **Categorías**: lista `CATS` en `public/index.html`.
+- **Medios de pago**: se agregan/borran desde la pestaña *Medios* de la app.

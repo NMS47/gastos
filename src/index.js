@@ -1,11 +1,5 @@
-// API de gastos. Cloudflare Pages Functions + D1.
-// Rutas:
-//   GET    /api/state
-//   POST   /api/movs                {fecha, descripcion, monto, cuenta_id, cuotas, cat}
-//   DELETE /api/movs/:id
-//   POST   /api/cuentas             {nombre, tipo, cierre, venc}
-//   POST   /api/cuentas/:id/default
-//   DELETE /api/cuentas/:id
+// Worker único: sirve los archivos estáticos de /public y atiende /api/*.
+// Reemplaza el viejo modelo de Pages Functions.
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -15,15 +9,14 @@ const json = (data, status = 200) =>
 
 const id = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-export async function onRequest(ctx) {
-  const { request, env, params } = ctx;
+async function api(request, env) {
   if (!env.DB) return json({ error: "Falta el binding DB a D1" }, 500);
 
-  // Puerta simple: si existe la variable PIN, hay que mandarla en el header.
   if (env.PIN && request.headers.get("x-pin") !== env.PIN)
     return json({ error: "PIN incorrecto" }, 401);
 
-  const seg = [].concat(params.path || []);
+  const url = new URL(request.url);
+  const seg = url.pathname.replace(/^\/api\/?/, "").split("/").filter(Boolean);
   const [res, rid, action] = seg;
   const m = request.method;
 
@@ -100,6 +93,14 @@ export async function onRequest(ctx) {
 
     return json({ error: "Ruta no encontrada" }, 404);
   } catch (e) {
-    return json({ error: String(e && e.message || e) }, 500);
+    return json({ error: String((e && e.message) || e) }, 500);
   }
 }
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    if (url.pathname.startsWith("/api/")) return api(request, env);
+    return env.ASSETS.fetch(request);
+  }
+};
