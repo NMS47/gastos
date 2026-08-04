@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS mov (
   cuenta_id   TEXT NOT NULL REFERENCES cuenta(id),
   cuotas      INTEGER NOT NULL DEFAULT 1,
   cat         TEXT,
+  quien       TEXT,             -- quién lo cargó: 'nico' o 'dani'
   creado      TEXT NOT NULL
 );
 

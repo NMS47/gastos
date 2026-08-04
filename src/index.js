@@ -45,11 +45,12 @@ async function api(request, env) {
         cuenta_id: b.cuenta_id,
         cuotas: Math.min(Math.max(parseInt(b.cuotas) || 1, 1), 60),
         cat: b.cat || null,
+        quien: b.quien === "dani" ? "dani" : "nico",
         creado: new Date().toISOString()
       };
       await env.DB.prepare(
-        "INSERT INTO mov (id,fecha,descripcion,monto,cuenta_id,cuotas,cat,creado) VALUES (?,?,?,?,?,?,?,?)"
-      ).bind(row.id, row.fecha, row.descripcion, row.monto, row.cuenta_id, row.cuotas, row.cat, row.creado).run();
+        "INSERT INTO mov (id,fecha,descripcion,monto,cuenta_id,cuotas,cat,quien,creado) VALUES (?,?,?,?,?,?,?,?,?)"
+      ).bind(row.id, row.fecha, row.descripcion, row.monto, row.cuenta_id, row.cuotas, row.cat, row.quien, row.creado).run();
       return json(row, 201);
     }
 

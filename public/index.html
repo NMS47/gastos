@@ -50,6 +50,9 @@
   .hint b{color:var(--credit); font-weight:700}
   .row{display:flex; align-items:baseline; gap:10px; padding:12px 0; border-bottom:1px solid var(--line)}
   .row:last-child{border-bottom:none}
+  .row.q-nico{background:#EAF0F9}
+  .row.q-dani{background:#FAEDF2}
+  .row.q-nico,.row.q-dani{margin:0 -16px; padding-left:16px; padding-right:16px}
   .row .name{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .row .sub{display:block; font-size:12px; color:var(--muted); margin-top:3px}
   .row .val{font-weight:700; white-space:nowrap}
@@ -139,7 +142,18 @@
   </section>
 
   <section id="v-acc" hidden>
-    <h1>Medios de pago</h1>
+    <h1>Este teléfono</h1>
+    <div class="card">
+      <div class="field" style="margin:0">
+        <label for="quien">Quién carga desde acá</label>
+        <select id="quien">
+          <option value="nico">Nico</option>
+          <option value="dani">Dani</option>
+        </select>
+      </div>
+      <p class="hint">Se guarda en este teléfono. Los gastos que cargues quedan pintados con tu color.</p>
+    </div>
+    <h1 style="margin-top:22px">Medios de pago</h1>
     <div class="card" id="acclist"></div>
     <div class="sect">Agregar</div>
     <div class="card">
@@ -264,7 +278,7 @@ function renderUltimos(){
   const l = movs.slice().sort((a,b) => (a.creado < b.creado ? 1 : -1)).slice(0,4);
   $("ultimos").innerHTML = l.length ? l.map(m => {
     const c = cuentas.find(x => x.id === m.cuenta_id) || {nombre:"?"};
-    return `<div class="row"><div class="name">${esc(m.descripcion)}
+    return `<div class="row ${m.quien ? "q-"+m.quien : ""}"><div class="name">${esc(m.descripcion)}
       <span class="sub">${esc(c.nombre)}${m.cuotas>1 ? " · "+m.cuotas+" cuotas" : ""} · ${m.fecha.slice(8)}/${m.fecha.slice(5,7)}</span></div>
       <div class="val mono">${fmt(m.monto)}</div></div>`;
   }).join("") : `<div class="empty">Todavía no cargaron nada. El primer gasto que hagan hoy va acá.</div>`;
@@ -291,7 +305,7 @@ function renderMonth(){
   $("mlist").innerHTML = filas.length ? filas.map(({m,i}) => {
     const c = cuentas.find(x => x.id === m.cuenta_id) || {nombre:"?"};
     const cuota = i.de > 1 ? `<span class="tag">${i.nro}/${i.de}</span>` : "";
-    return `<div class="row"><div class="name">${esc(m.descripcion)}${cuota}
+    return `<div class="row ${m.quien ? "q-"+m.quien : ""}"><div class="name">${esc(m.descripcion)}${cuota}
       <span class="sub">${esc(c.nombre)}${m.cat ? " · "+esc(m.cat) : ""} · comprado ${m.fecha.slice(8)}/${m.fecha.slice(5,7)}</span></div>
       <div class="val mono">${fmt(i.monto)}</div>
       <button class="del" data-del="${m.id}">borrar</button></div>`;
@@ -339,7 +353,8 @@ $("save").addEventListener("click", async () => {
   try {
     const row = await api("movs", "POST", {
       fecha: $("fecha").value, descripcion: $("desc").value.trim(), monto,
-      cuenta_id: c.id, cuotas: c.tipo === "credito" ? +$("cuotas").value : 1, cat: $("cat").value
+      cuenta_id: c.id, cuotas: c.tipo === "credito" ? +$("cuotas").value : 1, cat: $("cat").value,
+      quien: localStorage.getItem("quien") || "nico"
     });
     movs.push(row);
     showErr(""); toast("Gasto guardado");
@@ -371,6 +386,12 @@ $("acclist").addEventListener("click", async e => {
     } else return;
     showErr(""); renderAcc(); fillSelects(); renderLoad();
   } catch(e){ showErr(e.message); }
+});
+
+$("quien").value = localStorage.getItem("quien") || "nico";
+$("quien").addEventListener("change", e => {
+  localStorage.setItem("quien", e.target.value);
+  toast("Listo, este teléfono carga como " + e.target.selectedOptions[0].text);
 });
 
 $("a-tipo").addEventListener("change", e => $("a-dias").hidden = e.target.value !== "credito");
