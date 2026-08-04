@@ -1,8 +1,0 @@
-name = "gastos"
-compatibility_date = "2026-08-01"
-pages_build_output_dir = "public"
-
-[[d1_databases]]
-binding = "DB"
-database_name = "gastos"
-database_id = "29653e79-0153-4674-8755-e153f5d2bb8d"
