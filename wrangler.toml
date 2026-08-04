@@ -9,4 +9,4 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "gastos"
-database_id = "PEGAR-ACA-EL-ID-QUE-DEVUELVE-WRANGLER"
+database_id = "29653e79-0153-4674-8755-e153f5d2bb8d"
