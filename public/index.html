@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<title>Gastos</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0F5C55">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#14181B; --bg:#E9EBE6; --surface:#FDFDFB; --line:#D3D7CE;
+    --accent:#0F5C55; --credit:#3F3BA8; --muted:#6E757C; --danger:#8C2F1E; --r:14px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  body{margin:0; background:var(--bg); color:var(--ink);
+       font-family:'Space Grotesk',system-ui,sans-serif; font-size:16px;
+       padding-bottom:calc(86px + env(safe-area-inset-bottom))}
+  .mono{font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums}
+  .wrap{max-width:560px; margin:0 auto; padding:18px 16px 0}
+  h1{font-size:15px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted);
+     font-weight:500; margin:0 0 14px}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:16px}
+  label{display:block; font-size:12px; letter-spacing:.1em; text-transform:uppercase;
+        color:var(--muted); margin:0 0 6px; font-weight:500}
+  input,select{width:100%; font-family:inherit; font-size:17px; color:var(--ink);
+    background:var(--surface); border:1px solid var(--line); border-radius:10px;
+    padding:13px 12px; appearance:none}
+  input:focus,select:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:transparent}
+  select{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M1 1l5 5 5-5' fill='none' stroke='%236E757C' stroke-width='1.6'/></svg>");
+    background-repeat:no-repeat; background-position:right 14px center}
+  .field{margin-bottom:14px}
+  .amount{position:relative; margin-bottom:18px}
+  .amount span{position:absolute; left:0; top:16px; font-size:30px; color:var(--muted)}
+  .amount input{border:none; border-bottom:2px solid var(--ink); border-radius:0; background:none;
+    font-family:'JetBrains Mono',monospace; font-size:46px; font-weight:700; letter-spacing:-.02em;
+    padding:6px 0 6px 30px}
+  .amount input:focus{outline:none; border-bottom-color:var(--accent)}
+  .amount input::placeholder{color:#C3C8BF}
+  button{font-family:inherit; cursor:pointer}
+  .primary{width:100%; background:var(--accent); color:#fff; border:none; border-radius:10px;
+    padding:16px; font-size:17px; font-weight:700}
+  .primary:disabled{opacity:.4}
+  .hint{font-size:13px; color:var(--muted); margin:8px 0 0; line-height:1.45}
+  .hint b{color:var(--credit); font-weight:700}
+  .row{display:flex; align-items:baseline; gap:10px; padding:12px 0; border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:none}
+  .row .name{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .row .sub{display:block; font-size:12px; color:var(--muted); margin-top:3px}
+  .row .val{font-weight:700; white-space:nowrap}
+  .tag{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.06em;
+    padding:2px 6px; border-radius:5px; background:#EDEDF8; color:var(--credit); margin-left:6px}
+  .total .big{font-family:'JetBrains Mono',monospace; font-size:34px; font-weight:700; letter-spacing:-.02em}
+  .navmonth{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:14px}
+  .navmonth button{background:var(--surface); border:1px solid var(--line); border-radius:10px;
+    width:44px; height:40px; font-size:18px; color:var(--ink)}
+  .navmonth .m{font-weight:700}
+  .bar{height:6px; background:var(--line); border-radius:3px; overflow:hidden; margin-top:6px}
+  .bar i{display:block; height:100%; background:var(--accent)}
+  .sect{margin:22px 0 8px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+  .empty{color:var(--muted); font-size:14px; padding:8px 0; line-height:1.5}
+  .del{background:none; border:none; color:var(--danger); font-size:13px; padding:4px}
+  .star{background:none; border:none; font-size:17px; padding:4px; line-height:1}
+  .inline{display:flex; gap:8px}
+  .inline>*{flex:1}
+  nav{position:fixed; bottom:0; left:0; right:0; background:var(--surface);
+      border-top:1px solid var(--line); display:flex; padding-bottom:env(safe-area-inset-bottom)}
+  nav button{flex:1; background:none; border:none; padding:14px 4px 16px; font-size:13px;
+    font-weight:500; color:var(--muted); border-top:2px solid transparent; margin-top:-1px}
+  nav button[aria-selected="true"]{color:var(--accent); border-top-color:var(--accent); font-weight:700}
+  .toast{position:fixed; left:50%; transform:translateX(-50%); bottom:96px; background:var(--ink);
+    color:#fff; padding:11px 16px; border-radius:10px; font-size:14px; opacity:0;
+    transition:opacity .2s; pointer-events:none; z-index:9}
+  .toast.on{opacity:1}
+  .err{background:#FBEAE6; border:1px solid #E3BDB4; color:var(--danger); padding:10px 12px;
+    border-radius:10px; font-size:14px; margin-bottom:14px}
+  [hidden]{display:none !important}
+  @media (prefers-reduced-motion:reduce){*{transition:none !important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="err" class="err" hidden></div>
+
+  <section id="v-load">
+    <h1>Nuevo gasto</h1>
+    <div class="card">
+      <div class="amount">
+        <span>$</span>
+        <input id="monto" inputmode="decimal" placeholder="0" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="desc">En qué</label>
+        <input id="desc" placeholder="Coto, nafta, jardín…" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="cuenta">Medio de pago</label>
+        <select id="cuenta"></select>
+      </div>
+      <div class="field" id="f-cuotas" hidden>
+        <label for="cuotas">Cuotas</label>
+        <select id="cuotas"></select>
+      </div>
+      <div class="field">
+        <label for="cat">Categoría <span style="text-transform:none;letter-spacing:0">(opcional)</span></label>
+        <select id="cat"></select>
+      </div>
+      <div class="field">
+        <label for="fecha">Fecha</label>
+        <input id="fecha" type="date">
+      </div>
+      <button class="primary" id="save">Guardar gasto</button>
+      <p class="hint" id="hint"></p>
+    </div>
+    <div class="sect">Últimos cargados</div>
+    <div class="card" id="ultimos"></div>
+  </section>
+
+  <section id="v-month" hidden>
+    <div class="navmonth">
+      <button id="prev" aria-label="Mes anterior">‹</button>
+      <div class="m" id="mlabel"></div>
+      <button id="next" aria-label="Mes siguiente">›</button>
+    </div>
+    <div class="card">
+      <label style="margin:0">Total del mes</label>
+      <div class="total"><div class="big mono" id="mtotal">$0</div></div>
+      <div id="pormedio"></div>
+    </div>
+    <div class="sect">Movimientos</div>
+    <div class="card" id="mlist"></div>
+    <div class="sect">Ya comprometido en cuotas</div>
+    <div class="card" id="futuro"></div>
+  </section>
+
+  <section id="v-acc" hidden>
+    <h1>Medios de pago</h1>
+    <div class="card" id="acclist"></div>
+    <div class="sect">Agregar</div>
+    <div class="card">
+      <div class="field">
+        <label for="a-nom">Nombre</label>
+        <input id="a-nom" placeholder="Visa Santander" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="a-tipo">Tipo</label>
+        <select id="a-tipo">
+          <option value="debito">Débito / efectivo / billetera</option>
+          <option value="credito">Tarjeta de crédito</option>
+        </select>
+      </div>
+      <div class="inline field" id="a-dias" hidden>
+        <div>
+          <label for="a-cierre">Día de cierre</label>
+          <input id="a-cierre" inputmode="numeric" value="20">
+        </div>
+        <div>
+          <label for="a-venc">Día de pago</label>
+          <input id="a-venc" inputmode="numeric" value="5">
+        </div>
+      </div>
+      <button class="primary" id="addacc">Agregar medio</button>
+      <p class="hint">En las tarjetas de crédito el gasto se cuenta en el mes en que lo pagás, no en el que lo compraste.</p>
+    </div>
+  </section>
+</div>
+
+<nav role="tablist">
+  <button data-v="load" aria-selected="true">Cargar</button>
+  <button data-v="month" aria-selected="false">Mes</button>
+  <button data-v="acc" aria-selected="false">Medios</button>
+</nav>
+<div class="toast" id="toast"></div>
+
+<script>
+const CATS = ["Supermercado","Comida afuera","Nafta","Auto","Transporte","Servicios",
+  "Alquiler / Expensas","Hogar","Salud","Educación","Ropa","Ocio / Paseo",
+  "Suscripciones","Regalos","Impuestos","Mascotas","Otros"];
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto",
+               "septiembre","octubre","noviembre","diciembre"];
+
+let cuentas = [], movs = [], cursor = new Date();
+const $ = id => document.getElementById(id);
+const fmt = n => "$" + Math.round(n).toLocaleString("es-AR");
+const ym = d => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
+const esc = s => String(s).replace(/[<>&]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+
+function showErr(m){ $("err").textContent = m; $("err").hidden = !m; }
+function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("on");
+  setTimeout(()=>t.classList.remove("on"), 1800); }
+
+async function api(path, method = "GET", body, reintento){
+  const headers = { "x-pin": localStorage.getItem("pin") || "" };
+  if(body) headers["content-type"] = "application/json";
+  const r = await fetch("/api/" + path, {
+    method, headers, body: body ? JSON.stringify(body) : undefined
+  });
+  if(r.status === 401 && !reintento){
+    const pin = prompt("PIN de la app:");
+    if(pin){ localStorage.setItem("pin", pin); return api(path, method, body, true); }
+  }
+  const data = await r.json().catch(() => ({}));
+  if(!r.ok) throw new Error(data.error || "Error " + r.status);
+  return data;
+}
+
+// Un gasto en crédito se reparte en los meses de resumen que corresponden.
+function impactos(m){
+  const c = cuentas.find(x => x.id === m.cuenta_id);
+  const d = new Date(m.fecha + "T12:00:00");
+  if(!c || c.tipo !== "credito") return [{mes: ym(d), monto: m.monto, nro:1, de:1}];
+  const mesCiclo = d.getMonth() + (d.getDate() <= (c.cierre || 20) ? 1 : 2);
+  const n = m.cuotas || 1, base = Math.round(m.monto / n), out = [];
+  for(let i = 0; i < n; i++){
+    const f = new Date(d.getFullYear(), mesCiclo + i, 1);
+    out.push({ mes: ym(f), nro: i+1, de: n,
+      monto: i === n-1 ? m.monto - base*(n-1) : base });
+  }
+  return out;
+}
+
+function parseMonto(v){
+  if(!v) return 0;
+  let s = String(v).trim().replace(/\s/g,"");
+  if(s.includes(".") && s.includes(",")) s = s.replace(/\./g,"").replace(",",".");
+  else if(s.includes(",")) s = s.replace(",",".");
+  const n = parseFloat(s);
+  return isFinite(n) && n > 0 ? n : 0;
+}
+
+function fillSelects(){
+  const sel = $("cuenta"), prev = sel.value;
+  sel.innerHTML = cuentas.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join("");
+  const def = cuentas.find(c => c.def);
+  sel.value = cuentas.some(c => c.id === prev) ? prev : (def ? def.id : (cuentas[0]||{}).id);
+  if(!$("cat").options.length)
+    $("cat").innerHTML = `<option value="">—</option>` + CATS.map(c=>`<option>${c}</option>`).join("");
+  if(!$("cuotas").options.length)
+    $("cuotas").innerHTML = [1,2,3,6,9,12,18,24].map(n=>`<option value="${n}">${n}</option>`).join("");
+}
+
+function renderLoad(){
+  const c = cuentas.find(x => x.id === $("cuenta").value);
+  const esCred = c && c.tipo === "credito";
+  $("f-cuotas").hidden = !esCred;
+  if(!esCred) $("cuotas").value = "1";
+  const monto = parseMonto($("monto").value);
+  if(esCred && monto > 0 && $("fecha").value){
+    const im = impactos({cuenta_id:c.id, fecha:$("fecha").value, monto, cuotas:+$("cuotas").value});
+    const [y, mm] = im[0].mes.split("-");
+    $("hint").innerHTML = im.length > 1
+      ? `<b>${im.length} cuotas de ${fmt(im[0].monto)}</b> — la primera entra en el resumen de ${MESES[+mm-1]} ${y}.`
+      : `Entra en el resumen de <b>${MESES[+mm-1]} ${y}</b>.`;
+  } else $("hint").textContent = "";
+  $("save").disabled = !(monto > 0);
+}
+
+function renderUltimos(){
+  const l = movs.slice().sort((a,b) => (a.creado < b.creado ? 1 : -1)).slice(0,4);
+  $("ultimos").innerHTML = l.length ? l.map(m => {
+    const c = cuentas.find(x => x.id === m.cuenta_id) || {nombre:"?"};
+    return `<div class="row"><div class="name">${esc(m.descripcion)}
+      <span class="sub">${esc(c.nombre)}${m.cuotas>1 ? " · "+m.cuotas+" cuotas" : ""} · ${m.fecha.slice(8)}/${m.fecha.slice(5,7)}</span></div>
+      <div class="val mono">${fmt(m.monto)}</div></div>`;
+  }).join("") : `<div class="empty">Todavía no cargaron nada. El primer gasto que hagan hoy va acá.</div>`;
+}
+
+function renderMonth(){
+  const key = ym(cursor);
+  $("mlabel").textContent = MESES[cursor.getMonth()] + " " + cursor.getFullYear();
+  const filas = [];
+  movs.forEach(m => impactos(m).forEach(i => { if(i.mes === key) filas.push({m, i}); }));
+  const total = filas.reduce((a,f) => a + f.i.monto, 0);
+  $("mtotal").textContent = fmt(total);
+
+  const porC = {};
+  filas.forEach(f => porC[f.m.cuenta_id] = (porC[f.m.cuenta_id]||0) + f.i.monto);
+  $("pormedio").innerHTML = Object.entries(porC).sort((a,b) => b[1]-a[1]).map(([cid,v]) => {
+    const c = cuentas.find(x => x.id === cid) || {nombre:"?"};
+    return `<div style="margin-top:12px"><div class="row" style="border:none;padding:0">
+      <div class="name">${esc(c.nombre)}</div><div class="val mono">${fmt(v)}</div></div>
+      <div class="bar"><i style="width:${total ? v/total*100 : 0}%"></i></div></div>`;
+  }).join("");
+
+  filas.sort((a,b) => a.m.fecha < b.m.fecha ? 1 : -1);
+  $("mlist").innerHTML = filas.length ? filas.map(({m,i}) => {
+    const c = cuentas.find(x => x.id === m.cuenta_id) || {nombre:"?"};
+    const cuota = i.de > 1 ? `<span class="tag">${i.nro}/${i.de}</span>` : "";
+    return `<div class="row"><div class="name">${esc(m.descripcion)}${cuota}
+      <span class="sub">${esc(c.nombre)}${m.cat ? " · "+esc(m.cat) : ""} · comprado ${m.fecha.slice(8)}/${m.fecha.slice(5,7)}</span></div>
+      <div class="val mono">${fmt(i.monto)}</div>
+      <button class="del" data-del="${m.id}">borrar</button></div>`;
+  }).join("") : `<div class="empty">Sin movimientos en este mes.</div>`;
+
+  const fut = {};
+  movs.forEach(m => impactos(m).forEach(i => { if(i.mes > key && i.de > 1) fut[i.mes] = (fut[i.mes]||0) + i.monto; }));
+  const keys = Object.keys(fut).sort().slice(0,6);
+  $("futuro").innerHTML = keys.length ? keys.map(k => {
+    const [y, mm] = k.split("-");
+    return `<div class="row"><div class="name">${MESES[+mm-1]} ${y}</div>
+      <div class="val mono">${fmt(fut[k])}</div></div>`;
+  }).join("") : `<div class="empty">No hay cuotas pendientes para los próximos meses.</div>`;
+}
+
+function renderAcc(){
+  $("acclist").innerHTML = cuentas.map(c => `<div class="row">
+    <button class="star" data-def="${c.id}" title="Usar por defecto">${c.def ? "★" : "☆"}</button>
+    <div class="name">${esc(c.nombre)}
+      <span class="sub">${c.tipo === "credito" ? `crédito · cierra ${c.cierre} · paga ${c.venc}` : "débito / efectivo"}</span></div>
+    <button class="del" data-rm="${c.id}">borrar</button></div>`).join("");
+}
+
+async function boot(){
+  $("fecha").value = new Date().toISOString().slice(0,10);
+  try {
+    const s = await api("state");
+    cuentas = s.cuentas; movs = s.movs; showErr("");
+  } catch(e){
+    showErr("No se pudieron cargar los datos: " + e.message);
+  }
+  fillSelects(); renderLoad(); renderUltimos(); renderMonth(); renderAcc();
+}
+
+["monto","cuenta","cuotas","fecha"].forEach(id => {
+  $(id).addEventListener("input", renderLoad);
+  $(id).addEventListener("change", renderLoad);
+});
+
+$("save").addEventListener("click", async () => {
+  const monto = parseMonto($("monto").value);
+  if(!monto) return;
+  const c = cuentas.find(x => x.id === $("cuenta").value);
+  $("save").disabled = true;
+  try {
+    const row = await api("movs", "POST", {
+      fecha: $("fecha").value, descripcion: $("desc").value.trim(), monto,
+      cuenta_id: c.id, cuotas: c.tipo === "credito" ? +$("cuotas").value : 1, cat: $("cat").value
+    });
+    movs.push(row);
+    showErr(""); toast("Gasto guardado");
+    $("monto").value = ""; $("desc").value = ""; $("cuotas").value = "1";
+    renderUltimos(); renderMonth(); $("monto").focus();
+  } catch(e){ showErr("No se guardó: " + e.message); }
+  renderLoad();
+});
+
+$("mlist").addEventListener("click", async e => {
+  const id = e.target.dataset.del; if(!id) return;
+  if(!confirm("¿Borrar este gasto y todas sus cuotas?")) return;
+  try {
+    await api("movs/" + id, "DELETE");
+    movs = movs.filter(m => m.id !== id);
+    showErr(""); renderMonth(); renderUltimos(); toast("Gasto borrado");
+  } catch(e){ showErr("No se borró: " + e.message); }
+});
+
+$("acclist").addEventListener("click", async e => {
+  const d = e.target.dataset.def, r = e.target.dataset.rm;
+  try {
+    if(d){
+      await api("cuentas/" + d + "/default", "POST");
+      cuentas.forEach(c => c.def = c.id === d ? 1 : 0);
+    } else if(r){
+      await api("cuentas/" + r, "DELETE");
+      cuentas = cuentas.filter(c => c.id !== r);
+    } else return;
+    showErr(""); renderAcc(); fillSelects(); renderLoad();
+  } catch(e){ showErr(e.message); }
+});
+
+$("a-tipo").addEventListener("change", e => $("a-dias").hidden = e.target.value !== "credito");
+
+$("addacc").addEventListener("click", async () => {
+  const nombre = $("a-nom").value.trim();
+  if(!nombre){ $("a-nom").focus(); return; }
+  try {
+    const c = await api("cuentas", "POST", { nombre, tipo: $("a-tipo").value,
+      cierre: +$("a-cierre").value, venc: +$("a-venc").value });
+    cuentas.push(c);
+    $("a-nom").value = ""; showErr(""); renderAcc(); fillSelects(); toast(nombre + " agregado");
+  } catch(e){ showErr(e.message); }
+});
+
+$("prev").addEventListener("click", () => { cursor.setDate(1); cursor.setMonth(cursor.getMonth()-1); renderMonth(); });
+$("next").addEventListener("click", () => { cursor.setDate(1); cursor.setMonth(cursor.getMonth()+1); renderMonth(); });
+
+document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("nav button").forEach(x => x.setAttribute("aria-selected", x === b));
+  ["load","month","acc"].forEach(v => $("v-"+v).hidden = v !== b.dataset.v);
+  if(b.dataset.v === "month") renderMonth();
+  if(b.dataset.v === "acc") renderAcc();
+}));
+
+boot();
+</script>
+</body>
+</html>
