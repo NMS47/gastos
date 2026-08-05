@@ -113,7 +113,7 @@ setea al mes corriente en el alta.
 |--------|-------------------------|----------|
 | GET    | `/api/state`            | Corre la generación y devuelve `{cuentas, movs, servicios}` |
 | POST   | `/api/servicios`        | Alta. `desde` se setea al mes corriente en el servidor |
-| PATCH  | `/api/servicios/:id`    | Edita `nombre`, `monto`, `dia`, `cuenta_id`, `cat`, `modo`, `activo` |
+| PATCH  | `/api/servicios/:id`    | Edita `nombre`, `monto`, `dia`, `cuenta_id`, `cat`, `modo`, `activo`. Devuelve el servicio ya actualizado |
 | DELETE | `/api/servicios/:id`    | Solo si nunca generó gastos; si no, 409 sugiriendo desactivar |
 | POST   | `/api/movs/:id/pagar`   | Body `{monto}`. Pone `estado='pagado'` y el monto real. **No toca `fecha`** |
 | DELETE | `/api/movs/:id`         | Si tiene `servicio_id`, pasa a `estado='omitido'` en vez de borrar |

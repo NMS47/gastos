@@ -285,7 +285,7 @@ Endpoints CRUD de `servicio` y `GET /api/state` devolviendo la lista. Todavía *
 - Produces:
   - `GET /api/state` → `{cuentas, movs, servicios}`
   - `POST /api/servicios` → fila creada, 201
-  - `PATCH /api/servicios/:id` → `{ok: true}`
+  - `PATCH /api/servicios/:id` → el servicio ya actualizado (objeto completo)
   - `DELETE /api/servicios/:id` → `{ok: true}` o 409 si ya generó gastos
 
 - [ ] **Step 1: Importar el módulo puro**
