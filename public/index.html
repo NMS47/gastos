@@ -227,7 +227,8 @@ const ym = d => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
 const esc = s => String(s).replace(/[<>&]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
 
 const nombreCuenta = cid => (cuentas.find(x => x.id === cid) || {nombre:"?"}).nombre;
-const hoyISO = () => new Date().toISOString().slice(0,10);
+const hoyISO = () => { const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); };
 
 // Pendientes cuyo vencimiento ya pasó, incluidos los de meses anteriores:
 // una boleta de julio sin pagar tiene que seguir avisando en agosto.
@@ -383,11 +384,13 @@ function renderServicios(){
     if(!mv) return `<div class="row off">
       <div class="name">${esc(s.nombre)}<span class="sub">${esc(nombreCuenta(s.cuenta_id))} · día ${s.dia}</span></div>
       <div class="val mono">${fmt(s.monto)}</div></div>`;
+    const vencidoEsteMes = mv.estado === "pendiente" && mv.fecha <= hoyISO();
     const estado = mv.estado === "pagado" ? "pagado"
       : mv.estado === "omitido" ? "salteado este mes"
+      : vencidoEsteMes ? "venció el " + mv.fecha.slice(8) + "/" + mv.fecha.slice(5,7)
       : "vence " + mv.fecha.slice(8);
     return `<div class="row${mv.estado === "omitido" ? " off" : ""}">
-      <div class="name">${esc(s.nombre)}
+      <div class="name">${esc(s.nombre)}${vencidoEsteMes ? `<span class="tag venc">vencido</span>` : ""}
         <span class="sub">${esc(nombreCuenta(s.cuenta_id))} · ${estado}</span></div>
       <div class="val mono">${fmt(mv.monto)}</div>
       ${mv.estado === "pendiente" ? `<button class="pay" data-pay="${mv.id}">Pagar</button>` : ""}</div>`;
@@ -410,7 +413,7 @@ function renderAcc(){
 }
 
 async function boot(){
-  $("fecha").value = new Date().toISOString().slice(0,10);
+  $("fecha").value = hoyISO();
   try {
     const s = await api("state");
     cuentas = s.cuentas; movs = s.movs; servicios = s.servicios || []; showErr("");
