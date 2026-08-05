@@ -133,6 +133,47 @@ async function api(request, env) {
       return json({ ok: true });
     }
 
+    if (res === "cuentas" && rid && m === "PATCH") {
+      const b = await request.json();
+      const actual = await env.DB.prepare("SELECT * FROM cuenta WHERE id = ?").bind(rid).first();
+      if (!actual) return json({ error: "Medio de pago inexistente" }, 404);
+
+      const nombre = b.nombre === undefined ? actual.nombre : (b.nombre || "").trim().slice(0, 40);
+      if (!nombre) return json({ error: "Poné un nombre" }, 400);
+
+      // Un límite puede quedar sin cargar: "" o null lo borran, un número lo fija.
+      const lim = (v, prev) => {
+        if (v === undefined) return prev;
+        if (v === null || v === "") return null;
+        const n = Number(v);
+        return n >= 0 ? n : prev;
+      };
+      // Las bases siempre tienen valor; nunca son NULL.
+      const base = (v, prev) => {
+        if (v === undefined) return prev;
+        const n = Number(v);
+        return n >= 0 ? n : prev;
+      };
+      const dia = (v, prev) => {
+        if (v === undefined) return prev;
+        return Math.min(Math.max(parseInt(v) || prev || 1, 1), 31);
+      };
+
+      // Los campos de crédito no aplican a una cuenta de débito: se fuerzan a su valor neutro.
+      const cred = actual.tipo === "credito";
+      const cierre        = cred ? dia(b.cierre, actual.cierre) : null;
+      const venc          = cred ? dia(b.venc, actual.venc) : null;
+      const limite_pago   = cred ? lim(b.limite_pago, actual.limite_pago) : null;
+      const limite_cuotas = cred ? lim(b.limite_cuotas, actual.limite_cuotas) : null;
+      const base_pago     = cred ? base(b.base_pago, actual.base_pago) : 0;
+      const base_cuotas   = cred ? base(b.base_cuotas, actual.base_cuotas) : 0;
+
+      await env.DB.prepare(
+        "UPDATE cuenta SET nombre=?, cierre=?, venc=?, limite_pago=?, limite_cuotas=?, base_pago=?, base_cuotas=? WHERE id=?"
+      ).bind(nombre, cierre, venc, limite_pago, limite_cuotas, base_pago, base_cuotas, rid).run();
+      return json({ ...actual, nombre, cierre, venc, limite_pago, limite_cuotas, base_pago, base_cuotas });
+    }
+
     if (res === "cuentas" && rid && m === "DELETE") {
       const usada = await env.DB.prepare("SELECT 1 FROM mov WHERE cuenta_id = ? LIMIT 1").bind(rid).first();
       if (usada) return json({ error: "Ese medio tiene gastos cargados" }, 409);
