@@ -160,6 +160,40 @@
     <div class="card" id="servauto"></div>
     <div class="sect">Los pagás vos</div>
     <div class="card" id="servman"></div>
+    <div class="sect">Agregar servicio</div>
+    <div class="card">
+      <div class="field">
+        <label for="s-nom">Nombre</label>
+        <input id="s-nom" placeholder="Netflix, Edenor, expensas…" autocomplete="off">
+      </div>
+      <div class="inline field">
+        <div>
+          <label for="s-monto">Monto</label>
+          <input id="s-monto" inputmode="decimal" placeholder="0" autocomplete="off">
+        </div>
+        <div>
+          <label for="s-dia">Día del mes</label>
+          <input id="s-dia" inputmode="numeric" value="10">
+        </div>
+      </div>
+      <div class="field">
+        <label for="s-modo">Cómo se paga</label>
+        <select id="s-modo">
+          <option value="manual">Lo pago yo</option>
+          <option value="auto">Se debita solo</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="s-cuenta">Medio de pago</label>
+        <select id="s-cuenta"></select>
+      </div>
+      <div class="field">
+        <label for="s-cat">Categoría <span style="text-transform:none;letter-spacing:0">(opcional)</span></label>
+        <select id="s-cat"></select>
+      </div>
+      <button class="primary" id="addserv">Agregar servicio</button>
+      <p class="hint">Los que se debitan solos se cargan como gasto sin que hagas nada. Los que pagás vos te esperan con un botón para confirmar el monto real.</p>
+    </div>
   </section>
 
   <section id="v-acc" hidden>
@@ -286,6 +320,12 @@ function fillSelects(){
     $("cat").innerHTML = `<option value="">—</option>` + CATS.map(c=>`<option>${c}</option>`).join("");
   if(!$("cuotas").options.length)
     $("cuotas").innerHTML = [1,2,3,6,9,12,18,24].map(n=>`<option value="${n}">${n}</option>`).join("");
+
+  const ss = $("s-cuenta"), sprev = ss.value;
+  ss.innerHTML = cuentas.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join("");
+  if(cuentas.some(c => c.id === sprev)) ss.value = sprev;
+  if(!$("s-cat").options.length)
+    $("s-cat").innerHTML = `<option value="">—</option>` + CATS.map(c=>`<option>${c}</option>`).join("");
 }
 
 function renderLoad(){
@@ -366,7 +406,8 @@ function renderServicios(){
   $("servauto").innerHTML = auto.length ? auto.map(s => `<div class="row">
     <div class="name">${esc(s.nombre)}
       <span class="sub">${esc(nombreCuenta(s.cuenta_id))} · día ${s.dia}</span></div>
-    <div class="val mono">${fmt(s.monto)}</div></div>`).join("")
+    <div class="val mono">${fmt(s.monto)}</div>
+    <button class="del" data-off="${s.id}">baja</button></div>`).join("")
     : `<div class="empty">Ninguno todavía. Acá van Netflix, Spotify o el seguro: lo que se debita solo.</div>`;
 
   const vencidos = movs
@@ -383,7 +424,8 @@ function renderServicios(){
     const mv = movs.find(m => m.servicio_id === s.id && m.fecha.slice(0,7) === mes);
     if(!mv) return `<div class="row off">
       <div class="name">${esc(s.nombre)}<span class="sub">${esc(nombreCuenta(s.cuenta_id))} · día ${s.dia}</span></div>
-      <div class="val mono">${fmt(s.monto)}</div></div>`;
+      <div class="val mono">${fmt(s.monto)}</div>
+      <button class="del" data-off="${s.id}">baja</button></div>`;
     const vencidoEsteMes = mv.estado === "pendiente" && mv.fecha <= hoyISO();
     const estado = mv.estado === "pagado" ? "pagado"
       : mv.estado === "omitido" ? "salteado este mes"
@@ -393,7 +435,8 @@ function renderServicios(){
       <div class="name">${esc(s.nombre)}${vencidoEsteMes ? `<span class="tag venc">vencido</span>` : ""}
         <span class="sub">${esc(nombreCuenta(s.cuenta_id))} · ${estado}</span></div>
       <div class="val mono">${fmt(mv.monto)}</div>
-      ${mv.estado === "pendiente" ? `<button class="pay" data-pay="${mv.id}">Pagar</button>` : ""}</div>`;
+      ${mv.estado === "pendiente" ? `<button class="pay" data-pay="${mv.id}">Pagar</button>` : ""}
+      <button class="del" data-off="${s.id}">baja</button></div>`;
   };
 
   $("servman").innerHTML = (man.length || vencidos.length)
@@ -489,6 +532,65 @@ $("addacc").addEventListener("click", async () => {
     $("a-nom").value = ""; showErr(""); renderAcc(); fillSelects(); toast(nombre + " agregado");
   } catch(e){ showErr(e.message); }
 });
+
+$("addserv").addEventListener("click", async () => {
+  const nombre = $("s-nom").value.trim();
+  if(!nombre){ $("s-nom").focus(); return; }
+  const monto = parseMonto($("s-monto").value);
+  if(!monto){ $("s-monto").focus(); return; }
+  try {
+    const s = await api("servicios", "POST", {
+      nombre, monto, dia: +$("s-dia").value, cuenta_id: $("s-cuenta").value,
+      modo: $("s-modo").value, cat: $("s-cat").value
+    });
+    servicios.push(s);
+    $("s-nom").value = ""; $("s-monto").value = "";
+    showErr(""); renderServicios(); toast(nombre + " agregado");
+  } catch(e){ showErr(e.message); }
+});
+
+async function darDeBaja(sid){
+  const s = servicios.find(x => x.id === sid);
+  if(!s || !confirm(`¿Dar de baja ${s.nombre}? Deja de generar gastos, pero el historial queda.`)) return;
+  try {
+    await api("servicios/" + sid, "PATCH", { activo: 0 });
+    s.activo = 0;
+    showErr(""); renderServicios(); toast(s.nombre + " dado de baja");
+  } catch(e){ showErr(e.message); }
+}
+
+// El botón Pagar convierte la fila en un input con el monto esperado precargado,
+// porque en la luz o el gas casi siempre difiere del estimado.
+function abrirPago(mid, fila){
+  const mv = movs.find(m => m.id === mid);
+  const yaAbierto = fila.nextElementSibling && fila.nextElementSibling.classList.contains("payrow");
+  if(!mv || yaAbierto) return;
+  const box = document.createElement("div");
+  box.className = "payrow";
+  box.innerHTML = `<input inputmode="decimal" value="${Math.round(mv.monto)}" aria-label="Monto real">
+    <button class="pay" data-ok="${mid}">Confirmar</button>`;
+  fila.after(box);
+  box.querySelector("input").focus();
+  box.querySelector("input").select();
+}
+
+async function confirmarPago(mid, box){
+  const monto = parseMonto(box.querySelector("input").value);
+  if(!monto) return;
+  try {
+    const row = await api("movs/" + mid + "/pagar", "POST", { monto });
+    const i = movs.findIndex(m => m.id === mid);
+    if(i >= 0) movs[i] = row;
+    showErr(""); renderServicios(); renderMonth(); renderUltimos(); toast("Pagado");
+  } catch(e){ showErr("No se pudo pagar: " + e.message); }
+}
+
+["servauto","servman"].forEach(cid => $(cid).addEventListener("click", e => {
+  const off = e.target.dataset.off, pay = e.target.dataset.pay, ok = e.target.dataset.ok;
+  if(off) return darDeBaja(off);
+  if(pay) return abrirPago(pay, e.target.closest(".row"));
+  if(ok)  return confirmarPago(ok, e.target.closest(".payrow"));
+}));
 
 $("prev").addEventListener("click", () => { cursor.setDate(1); cursor.setMonth(cursor.getMonth()-1); renderMonth(); });
 $("next").addEventListener("click", () => { cursor.setDate(1); cursor.setMonth(cursor.getMonth()+1); renderMonth(); });
