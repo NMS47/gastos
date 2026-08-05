@@ -139,10 +139,15 @@ async function api(request, env) {
       if (!c) return json({ error: "Medio de pago inexistente" }, 404);
       if (c.tipo !== "credito") return json({ error: "Solo las tarjetas tienen resumen" }, 400);
 
+      // Sin día de cierre no hay forma de saber qué resumen cerró. Antes esto caía a un 20
+      // por defecto, que fechaba el pago con el cierre de otra tarjeta y liberaba el límite
+      // equivocado sin avisar. Mejor que falle fuerte.
+      if (!c.cierre) return json({ error: "Esa tarjeta no tiene día de cierre cargado" }, 400);
+
       // Se guarda el mes que impactos() le asigna al resumen que YA cerró. La base de un
       // pago se borra porque todo lo que se debía entró en ese resumen y quedó saldado;
       // de acá en más el usado sale solo de los gastos cargados.
-      const mes = mesResumenCerrado(c.cierre || 20);
+      const mes = mesResumenCerrado(c.cierre);
       await env.DB.prepare("UPDATE cuenta SET pagado_hasta = ?, base_pago = 0 WHERE id = ?")
         .bind(mes, rid).run();
       return json({ ...c, pagado_hasta: mes, base_pago: 0 });
