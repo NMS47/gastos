@@ -1,4 +1,5 @@
 import { mesActualAR, fechaDeServicio, estadoInicial } from "./servicios.mjs";
+import { mesResumenCerrado } from "./tarjetas.mjs";
 
 // Worker único: sirve los archivos estáticos de /public y atiende /api/*.
 // Reemplaza el viejo modelo de Pages Functions.
@@ -131,6 +132,20 @@ async function api(request, env) {
         env.DB.prepare("UPDATE cuenta SET def = 1 WHERE id = ?").bind(rid)
       ]);
       return json({ ok: true });
+    }
+
+    if (res === "cuentas" && rid && action === "resumen-pagado" && m === "POST") {
+      const c = await env.DB.prepare("SELECT * FROM cuenta WHERE id = ?").bind(rid).first();
+      if (!c) return json({ error: "Medio de pago inexistente" }, 404);
+      if (c.tipo !== "credito") return json({ error: "Solo las tarjetas tienen resumen" }, 400);
+
+      // Se guarda el mes que impactos() le asigna al resumen que YA cerró. La base de un
+      // pago se borra porque todo lo que se debía entró en ese resumen y quedó saldado;
+      // de acá en más el usado sale solo de los gastos cargados.
+      const mes = mesResumenCerrado(c.cierre || 20);
+      await env.DB.prepare("UPDATE cuenta SET pagado_hasta = ?, base_pago = 0 WHERE id = ?")
+        .bind(mes, rid).run();
+      return json({ ...c, pagado_hasta: mes, base_pago: 0 });
     }
 
     if (res === "cuentas" && rid && m === "PATCH") {
