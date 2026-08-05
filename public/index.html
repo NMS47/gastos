@@ -528,6 +528,73 @@ function renderAcc(){
   }).join("");
 }
 
+// El value de cada input se asigna por propiedad y no interpolado en el HTML: esc() no
+// escapa comillas, así que un nombre con " rompería el atributo.
+function abrirEdicion(cid, fila){
+  const c = cuentas.find(x => x.id === cid);
+  if(!c || fila.querySelector(".editbox")) return;
+  const cred = c.tipo === "credito";
+  const box = document.createElement("div");
+  box.className = "editbox";
+  box.innerHTML = `
+    <div class="field"><label>Nombre</label><input class="e-nom" autocomplete="off"></div>
+    ${cred ? `
+    <div class="inline field">
+      <div><label>Día de cierre</label><input class="e-cierre" inputmode="numeric"></div>
+      <div><label>Día de pago</label><input class="e-venc" inputmode="numeric"></div>
+    </div>
+    <div class="inline field">
+      <div><label>Límite en un pago</label><input class="e-lp" inputmode="decimal" placeholder="sin cargar"></div>
+      <div><label>Límite en cuotas</label><input class="e-lc" inputmode="decimal" placeholder="sin cargar"></div>
+    </div>
+    <div class="inline field">
+      <div><label>Usado en un pago</label><input class="e-bp" inputmode="decimal"></div>
+      <div><label>Usado en cuotas</label><input class="e-bc" inputmode="decimal"></div>
+    </div>
+    <p class="hint">Los "usado" son lo que ya debías antes de empezar con la app; de ahí en
+    más se suman los gastos que carguen. El de cuotas conviene bajarlo a mano cada tanto,
+    porque la app no conoce el cronograma de tus cuotas viejas. Ojo: cambiar el día de
+    cierre mueve de resumen los gastos ya cargados.</p>` : ""}
+    <div class="inline">
+      <button class="primary" data-save="${cid}">Guardar</button>
+      <button class="lnk" data-cancel="1">Cancelar</button>
+    </div>`;
+  fila.appendChild(box);
+  const set = (sel, v) => { const el = box.querySelector(sel); if(el) el.value = v; };
+  set(".e-nom", c.nombre);
+  if(cred){
+    set(".e-cierre", c.cierre ?? 20);
+    set(".e-venc", c.venc ?? 5);
+    set(".e-lp", c.limite_pago ?? "");
+    set(".e-lc", c.limite_cuotas ?? "");
+    set(".e-bp", c.base_pago ?? 0);
+    set(".e-bc", c.base_cuotas ?? 0);
+  }
+  box.querySelector(".e-nom").focus();
+}
+
+async function guardarCuenta(cid, box){
+  const c = cuentas.find(x => x.id === cid);
+  const val = sel => { const el = box.querySelector(sel); return el ? el.value.trim() : undefined; };
+  const cuerpo = { nombre: val(".e-nom") };
+  if(c.tipo === "credito"){
+    cuerpo.cierre = +val(".e-cierre");
+    cuerpo.venc = +val(".e-venc");
+    // Vacío borra el límite; con número lo fija. parseMonto acepta 1.234,56.
+    cuerpo.limite_pago   = val(".e-lp") === "" ? "" : parseMonto(val(".e-lp"));
+    cuerpo.limite_cuotas = val(".e-lc") === "" ? "" : parseMonto(val(".e-lc"));
+    cuerpo.base_pago   = parseMonto(val(".e-bp")) || 0;
+    cuerpo.base_cuotas = parseMonto(val(".e-bc")) || 0;
+  }
+  try {
+    const row = await api("cuentas/" + cid, "PATCH", cuerpo);
+    const i = cuentas.findIndex(x => x.id === cid);
+    if(i >= 0) cuentas[i] = row;
+    showErr(""); renderAcc(); fillSelects(); renderLoad(); renderMonth();
+    toast("Medio actualizado");
+  } catch(e){ showErr(e.message); }
+}
+
 async function boot(){
   $("fecha").value = hoyISO();
   try {
@@ -580,17 +647,31 @@ $("mlist").addEventListener("click", async e => {
 });
 
 $("acclist").addEventListener("click", async e => {
-  const d = e.target.dataset.def, r = e.target.dataset.rm;
+  const t = e.target.dataset;
+  if(t.edit) return abrirEdicion(t.edit, e.target.closest(".row"));
+  if(t.cancel){ const b = e.target.closest(".editbox"); if(b) b.remove(); return; }
+  if(t.save) return guardarCuenta(t.save, e.target.closest(".editbox"));
+  if(t.resumen){
+    const c = cuentas.find(x => x.id === t.resumen);
+    if(!c || !confirm(`¿Marcar como pagado el resumen de ${c.nombre}? Libera el límite en un pago y borra el usado que cargaste a mano.`)) return;
+    try {
+      const row = await api("cuentas/" + t.resumen + "/resumen-pagado", "POST");
+      const i = cuentas.findIndex(x => x.id === t.resumen);
+      if(i >= 0) cuentas[i] = row;
+      showErr(""); renderAcc(); toast("Resumen pagado");
+    } catch(err){ showErr(err.message); }
+    return;
+  }
   try {
-    if(d){
-      await api("cuentas/" + d + "/default", "POST");
-      cuentas.forEach(c => c.def = c.id === d ? 1 : 0);
-    } else if(r){
-      await api("cuentas/" + r, "DELETE");
-      cuentas = cuentas.filter(c => c.id !== r);
+    if(t.def){
+      await api("cuentas/" + t.def + "/default", "POST");
+      cuentas.forEach(c => c.def = c.id === t.def ? 1 : 0);
+    } else if(t.rm){
+      await api("cuentas/" + t.rm, "DELETE");
+      cuentas = cuentas.filter(c => c.id !== t.rm);
     } else return;
     showErr(""); renderAcc(); fillSelects(); renderLoad();
-  } catch(e){ showErr(e.message); }
+  } catch(err){ showErr(err.message); }
 });
 
 $("quien").value = localStorage.getItem("quien") || "nico";
