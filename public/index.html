@@ -58,6 +58,15 @@
   .row .val{font-weight:700; white-space:nowrap}
   .tag{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.06em;
     padding:2px 6px; border-radius:5px; background:#EDEDF8; color:var(--credit); margin-left:6px}
+  .tag.fijo{background:#E6F0EE; color:var(--accent)}
+  .tag.venc{background:#FBEAE6; color:var(--danger)}
+  .dot{display:inline-block; width:7px; height:7px; border-radius:50%;
+    background:var(--danger); margin-left:5px; vertical-align:middle}
+  .pay{background:var(--accent); color:#fff; border:none; border-radius:8px;
+    padding:7px 11px; font-size:13px; font-weight:700; white-space:nowrap}
+  .payrow{display:flex; gap:8px; align-items:center; padding:10px 0}
+  .payrow input{flex:1; font-size:16px; padding:9px 10px}
+  .off{opacity:.5}
   .total .big{font-family:'JetBrains Mono',monospace; font-size:34px; font-weight:700; letter-spacing:-.02em}
   .navmonth{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:14px}
   .navmonth button{background:var(--surface); border:1px solid var(--line); border-radius:10px;
@@ -141,6 +150,18 @@
     <div class="card" id="futuro"></div>
   </section>
 
+  <section id="v-serv" hidden>
+    <h1>Gasto fijo mensual</h1>
+    <div class="card">
+      <div class="total"><div class="big mono" id="fijototal">$0</div></div>
+      <p class="hint" id="fijodet"></p>
+    </div>
+    <div class="sect">Débito automático</div>
+    <div class="card" id="servauto"></div>
+    <div class="sect">Los pagás vos</div>
+    <div class="card" id="servman"></div>
+  </section>
+
   <section id="v-acc" hidden>
     <h1>Este teléfono</h1>
     <div class="card">
@@ -187,6 +208,7 @@
 <nav role="tablist">
   <button data-v="load" aria-selected="true">Cargar</button>
   <button data-v="month" aria-selected="false">Mes</button>
+  <button data-v="serv" aria-selected="false">Servicios<span class="dot" id="navdot" hidden></span></button>
   <button data-v="acc" aria-selected="false">Medios</button>
 </nav>
 <div class="toast" id="toast"></div>
@@ -198,11 +220,18 @@ const CATS = ["Supermercado","Comida afuera","Nafta","Auto","Transporte","Servic
 const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto",
                "septiembre","octubre","noviembre","diciembre"];
 
-let cuentas = [], movs = [], cursor = new Date();
+let cuentas = [], movs = [], servicios = [], cursor = new Date();
 const $ = id => document.getElementById(id);
 const fmt = n => "$" + Math.round(n).toLocaleString("es-AR");
 const ym = d => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
 const esc = s => String(s).replace(/[<>&]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+
+const nombreCuenta = cid => (cuentas.find(x => x.id === cid) || {nombre:"?"}).nombre;
+const hoyISO = () => new Date().toISOString().slice(0,10);
+
+// Pendientes cuyo vencimiento ya pasó, incluidos los de meses anteriores:
+// una boleta de julio sin pagar tiene que seguir avisando en agosto.
+const pendientesVencidos = () => movs.filter(m => m.estado === "pendiente" && m.fecha <= hoyISO());
 
 function showErr(m){ $("err").textContent = m; $("err").hidden = !m; }
 function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("on");
@@ -321,6 +350,57 @@ function renderMonth(){
   }).join("") : `<div class="empty">No hay cuotas pendientes para los próximos meses.</div>`;
 }
 
+function renderServicios(){
+  const mes = ym(new Date());
+  const act = servicios.filter(s => s.activo);
+  const suma = l => l.reduce((a,s) => a + s.monto, 0);
+  const auto = act.filter(s => s.modo === "auto");
+  const man  = act.filter(s => s.modo === "manual");
+
+  $("fijototal").textContent = fmt(suma(act));
+  $("fijodet").textContent = act.length
+    ? `automáticos ${fmt(suma(auto))} · los pagás vos ${fmt(suma(man))}`
+    : "Cargá los servicios para saber cuánto les sale fijo por mes.";
+
+  $("servauto").innerHTML = auto.length ? auto.map(s => `<div class="row">
+    <div class="name">${esc(s.nombre)}
+      <span class="sub">${esc(nombreCuenta(s.cuenta_id))} · día ${s.dia}</span></div>
+    <div class="val mono">${fmt(s.monto)}</div></div>`).join("")
+    : `<div class="empty">Ninguno todavía. Acá van Netflix, Spotify o el seguro: lo que se debita solo.</div>`;
+
+  const vencidos = movs
+    .filter(m => m.estado === "pendiente" && m.fecha.slice(0,7) < mes)
+    .sort((a,b) => a.fecha < b.fecha ? -1 : 1);
+
+  const filaVencida = m => `<div class="row">
+    <div class="name">${esc(m.descripcion)}<span class="tag venc">vencido</span>
+      <span class="sub">${esc(nombreCuenta(m.cuenta_id))} · venció el ${m.fecha.slice(8)}/${m.fecha.slice(5,7)}</span></div>
+    <div class="val mono">${fmt(m.monto)}</div>
+    <button class="pay" data-pay="${m.id}">Pagar</button></div>`;
+
+  const filaMes = s => {
+    const mv = movs.find(m => m.servicio_id === s.id && m.fecha.slice(0,7) === mes);
+    if(!mv) return `<div class="row off">
+      <div class="name">${esc(s.nombre)}<span class="sub">${esc(nombreCuenta(s.cuenta_id))} · día ${s.dia}</span></div>
+      <div class="val mono">${fmt(s.monto)}</div></div>`;
+    const estado = mv.estado === "pagado" ? "pagado"
+      : mv.estado === "omitido" ? "salteado este mes"
+      : "vence " + mv.fecha.slice(8);
+    return `<div class="row${mv.estado === "omitido" ? " off" : ""}">
+      <div class="name">${esc(s.nombre)}
+        <span class="sub">${esc(nombreCuenta(s.cuenta_id))} · ${estado}</span></div>
+      <div class="val mono">${fmt(mv.monto)}</div>
+      ${mv.estado === "pendiente" ? `<button class="pay" data-pay="${mv.id}">Pagar</button>` : ""}</div>`;
+  };
+
+  $("servman").innerHTML = (man.length || vencidos.length)
+    ? vencidos.map(filaVencida).join("") + man.map(filaMes).join("")
+    : `<div class="empty">Ninguno todavía. Acá van la luz, el agua o las expensas: lo que pagás vos.</div>`;
+
+  const n = pendientesVencidos().length;
+  $("navdot").hidden = n === 0;
+}
+
 function renderAcc(){
   $("acclist").innerHTML = cuentas.map(c => `<div class="row">
     <button class="star" data-def="${c.id}" title="Usar por defecto">${c.def ? "★" : "☆"}</button>
@@ -333,11 +413,11 @@ async function boot(){
   $("fecha").value = new Date().toISOString().slice(0,10);
   try {
     const s = await api("state");
-    cuentas = s.cuentas; movs = s.movs; showErr("");
+    cuentas = s.cuentas; movs = s.movs; servicios = s.servicios || []; showErr("");
   } catch(e){
     showErr("No se pudieron cargar los datos: " + e.message);
   }
-  fillSelects(); renderLoad(); renderUltimos(); renderMonth(); renderAcc();
+  fillSelects(); renderLoad(); renderUltimos(); renderMonth(); renderServicios(); renderAcc();
 }
 
 ["monto","cuenta","cuotas","fecha"].forEach(id => {
@@ -412,8 +492,9 @@ $("next").addEventListener("click", () => { cursor.setDate(1); cursor.setMonth(c
 
 document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => {
   document.querySelectorAll("nav button").forEach(x => x.setAttribute("aria-selected", x === b));
-  ["load","month","acc"].forEach(v => $("v-"+v).hidden = v !== b.dataset.v);
+  ["load","month","serv","acc"].forEach(v => $("v-"+v).hidden = v !== b.dataset.v);
   if(b.dataset.v === "month") renderMonth();
+  if(b.dataset.v === "serv") renderServicios();
   if(b.dataset.v === "acc") renderAcc();
 }));
 
