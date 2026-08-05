@@ -1,4 +1,4 @@
-import { mesActualAR } from "./servicios.mjs";
+import { mesActualAR, fechaDeServicio, estadoInicial } from "./servicios.mjs";
 
 // Worker único: sirve los archivos estáticos de /public y atiende /api/*.
 // Reemplaza el viejo modelo de Pages Functions.
@@ -10,6 +10,26 @@ const json = (data, status = 200) =>
   });
 
 const id = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+// Materializa los gastos del mes corriente de cada servicio activo.
+// El índice único parcial (servicio_id, mes) hace que repetir esto no duplique nada,
+// así que es seguro llamarlo en cada arranque de la app y desde los dos teléfonos a la vez.
+async function generarDelMes(env) {
+  const mes = mesActualAR();
+  const { results } = await env.DB.prepare(
+    "SELECT * FROM servicio WHERE activo = 1 AND desde <= ?"
+  ).bind(mes).all();
+  if (!results.length) return;
+
+  const creado = new Date().toISOString();
+  await env.DB.batch(results.map(s => env.DB.prepare(
+    "INSERT OR IGNORE INTO mov (id,fecha,descripcion,monto,cuenta_id,cuotas,cat,quien,servicio_id,estado,creado) " +
+    "VALUES (?,?,?,?,?,1,?,NULL,?,?,?)"
+  ).bind(
+    id(), fechaDeServicio(mes, s.dia), s.nombre, s.monto,
+    s.cuenta_id, s.cat, s.id, estadoInicial(s.modo), creado
+  )));
+}
 
 async function api(request, env) {
   if (!env.DB) return json({ error: "Falta el binding DB a D1" }, 500);
@@ -24,6 +44,7 @@ async function api(request, env) {
 
   try {
     if (res === "state" && m === "GET") {
+      await generarDelMes(env);
       const [cuentas, movs, servicios] = await env.DB.batch([
         env.DB.prepare("SELECT * FROM cuenta ORDER BY def DESC, nombre"),
         env.DB.prepare("SELECT * FROM mov ORDER BY fecha DESC, creado DESC LIMIT 2000"),
