@@ -169,7 +169,10 @@ async function api(request, env) {
       // Genera ya el gasto del mes corriente para este servicio, si corresponde:
       // si no, un alta a fin de mes se queda sin boleta hasta el próximo GET /api/state.
       // INSERT OR IGNORE hace que esto sea gratis para los servicios que ya la tienen.
-      await generarDelMes(env);
+      // Va en su propio try a propósito: el servicio ya quedó creado, así que un fallo
+      // acá no puede devolver 500. El usuario reintentaría, y como no hay unicidad por
+      // nombre quedarían dos servicios y dos boletas por mes para siempre.
+      try { await generarDelMes(env); } catch (_) { /* se genera en el próximo /api/state */ }
       return json(row, 201);
     }
 

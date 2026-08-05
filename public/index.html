@@ -568,17 +568,23 @@ $("addserv").addEventListener("click", async () => {
   const monto = parseMonto($("s-monto").value);
   if(!monto){ $("s-monto").focus(); return; }
   try {
-    await api("servicios", "POST", {
+    const nuevo = await api("servicios", "POST", {
       nombre, monto, dia: +$("s-dia").value, cuenta_id: $("s-cuenta").value,
       modo: $("s-modo").value, cat: $("s-cat").value
     });
-    // El alta ya generó (si correspondía) el gasto del mes en el servidor: se
-    // recarga todo el estado en vez de empujar solo el servicio, así el nuevo
-    // movimiento aparece en movs y la fila se pinta bien sin esperar a un reload.
-    const s = await api("state");
-    cuentas = s.cuentas; movs = s.movs; servicios = s.servicios || [];
+    // De acá en adelante el servicio YA existe en el servidor. Nada de lo que siga
+    // puede mostrarse como error: el usuario reintentaría y quedarían dos servicios.
     $("s-nom").value = ""; $("s-monto").value = "";
-    showErr(""); fillSelects(); renderServicios(); renderUltimos(); renderMonth(); toast(nombre + " agregado");
+    // El alta ya generó (si correspondía) el gasto del mes: se recarga todo el estado
+    // en vez de empujar solo el servicio, así el movimiento nuevo aparece en movs y la
+    // fila se pinta bien sin esperar a un reload. Si la recarga falla, alcanza con el
+    // servicio que devolvió el POST.
+    try {
+      const s = await api("state");
+      cuentas = s.cuentas; movs = s.movs; servicios = s.servicios || [];
+      fillSelects();
+    } catch(_){ servicios.push(nuevo); }
+    showErr(""); renderServicios(); renderUltimos(); renderMonth(); toast(nombre + " agregado");
   } catch(e){ showErr(e.message); }
 });
 
