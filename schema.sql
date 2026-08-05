@@ -2,12 +2,17 @@
 -- Aplicar:  npx wrangler d1 execute gastos --remote --file=./schema.sql
 
 CREATE TABLE IF NOT EXISTS cuenta (
-  id      TEXT PRIMARY KEY,
-  nombre  TEXT NOT NULL,
-  tipo    TEXT NOT NULL CHECK (tipo IN ('debito','credito')),
-  cierre  INTEGER,              -- día de cierre (solo crédito)
-  venc    INTEGER,              -- día de pago del resumen (solo crédito)
-  def     INTEGER NOT NULL DEFAULT 0
+  id            TEXT PRIMARY KEY,
+  nombre        TEXT NOT NULL,
+  tipo          TEXT NOT NULL CHECK (tipo IN ('debito','credito')),
+  cierre        INTEGER,          -- día de cierre (solo crédito)
+  venc          INTEGER,          -- día de pago del resumen (solo crédito)
+  def           INTEGER NOT NULL DEFAULT 0,
+  limite_pago   REAL,             -- tope en un pago; NULL = todavía no se cargó
+  limite_cuotas REAL,             -- tope en cuotas; NULL = todavía no se cargó
+  base_pago     REAL NOT NULL DEFAULT 0,  -- lo que ya se debía en un pago al empezar
+  base_cuotas   REAL NOT NULL DEFAULT 0,  -- ídem en cuotas
+  pagado_hasta  TEXT              -- YYYY-MM del último resumen pagado; NULL = ninguno
 );
 
 CREATE TABLE IF NOT EXISTS mov (
