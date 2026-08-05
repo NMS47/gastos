@@ -146,7 +146,7 @@
     </div>
     <div class="sect">Movimientos</div>
     <div class="card" id="mlist"></div>
-    <div class="sect" id="pend-sect" hidden>Pendientes de pagar</div>
+    <div class="sect" id="pend-sect" hidden>Vencen este mes</div>
     <div class="card" id="pendientes" hidden></div>
     <div class="sect">Ya comprometido en cuotas</div>
     <div class="card" id="futuro"></div>
@@ -351,7 +351,7 @@ function renderLoad(){
 }
 
 function renderUltimos(){
-  const l = movs.slice().sort((a,b) => (a.creado < b.creado ? 1 : -1)).slice(0,4);
+  const l = movs.filter(sumaAlTotal).sort((a,b) => (a.creado < b.creado ? 1 : -1)).slice(0,4);
   $("ultimos").innerHTML = l.length ? l.map(m => {
     const c = cuentas.find(x => x.id === m.cuenta_id) || {nombre:"?"};
     return `<div class="row ${m.quien ? "q-"+m.quien : ""}"><div class="name">${esc(m.descripcion)}
@@ -408,7 +408,7 @@ function renderMonth(){
       <div class="name">${esc(m.descripcion)}
         <span class="sub">${esc(nombreCuenta(m.cuenta_id))} · vence ${m.fecha.slice(8)}/${m.fecha.slice(5,7)}</span></div>
       <div class="val mono">${fmt(m.monto)}</div></div>`).join("") +
-      `<div class="row"><div class="name"><b>Falta pagar</b></div>
+      `<div class="row"><div class="name"><b>Total a vencer</b></div>
         <div class="val mono">${fmt(totalPend)}</div></div>`;
   }
 }
@@ -433,7 +433,8 @@ function renderServicios(){
     : `<div class="empty">Ninguno todavía. Acá van Netflix, Spotify o el seguro: lo que se debita solo.</div>`;
 
   const vencidos = movs
-    .filter(m => m.estado === "pendiente" && m.fecha.slice(0,7) < mes)
+    .filter(m => m.estado === "pendiente" &&
+      (m.fecha.slice(0,7) < mes || !act.some(s => s.id === m.servicio_id)))
     .sort((a,b) => a.fecha < b.fecha ? -1 : 1);
 
   const filaVencida = m => `<div class="row">
@@ -567,13 +568,17 @@ $("addserv").addEventListener("click", async () => {
   const monto = parseMonto($("s-monto").value);
   if(!monto){ $("s-monto").focus(); return; }
   try {
-    const s = await api("servicios", "POST", {
+    await api("servicios", "POST", {
       nombre, monto, dia: +$("s-dia").value, cuenta_id: $("s-cuenta").value,
       modo: $("s-modo").value, cat: $("s-cat").value
     });
-    servicios.push(s);
+    // El alta ya generó (si correspondía) el gasto del mes en el servidor: se
+    // recarga todo el estado en vez de empujar solo el servicio, así el nuevo
+    // movimiento aparece en movs y la fila se pinta bien sin esperar a un reload.
+    const s = await api("state");
+    cuentas = s.cuentas; movs = s.movs; servicios = s.servicios || [];
     $("s-nom").value = ""; $("s-monto").value = "";
-    showErr(""); renderServicios(); toast(nombre + " agregado");
+    showErr(""); fillSelects(); renderServicios(); renderUltimos(); renderMonth(); toast(nombre + " agregado");
   } catch(e){ showErr(e.message); }
 });
 
