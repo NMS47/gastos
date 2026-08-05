@@ -74,6 +74,16 @@
   .navmonth .m{font-weight:700}
   .bar{height:6px; background:var(--line); border-radius:3px; overflow:hidden; margin-top:6px}
   .bar i{display:block; height:100%; background:var(--accent)}
+  .bar i.alerta{background:var(--danger)}
+  .lim{margin-top:12px}
+  .limtop{display:flex; justify-content:space-between; align-items:baseline; gap:8px}
+  .limr{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+  .limn{font-size:13px; font-weight:700; white-space:nowrap}
+  .limsin{font-size:13px; color:var(--muted)}
+  .lnk{background:none; border:none; color:var(--muted); font-size:13px; padding:4px;
+    text-decoration:underline}
+  .accrow{display:flex; align-items:baseline; gap:10px}
+  .editbox{margin-top:14px; padding-top:14px; border-top:1px solid var(--line)}
   .sect{margin:22px 0 8px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
   .empty{color:var(--muted); font-size:14px; padding:8px 0; line-height:1.5}
   .del{background:none; border:none; color:var(--danger); font-size:13px; padding:4px}
@@ -470,12 +480,52 @@ function renderServicios(){
   $("navdot").hidden = n === 0;
 }
 
+// Cuánto límite ocupa una tarjeta hoy. Una sola regla: un gasto ocupa límite hasta que
+// su resumen esté pagado, así que se compara el mes que le asigna impactos() contra
+// pagado_hasta. Las bases son lo que ya se debía antes de usar la app.
+// Los pendientes y omitidos no llegaron a la tarjeta: los filtra sumaAlTotal.
+function usoDeCuenta(c){
+  const corte = c.pagado_hasta || "";
+  let pago = c.base_pago || 0, cuotas = c.base_cuotas || 0;
+  movs.filter(sumaAlTotal).filter(m => m.cuenta_id === c.id).forEach(m => {
+    impactos(m).forEach(i => {
+      if(i.mes <= corte) return;
+      if(i.de > 1) cuotas += i.monto; else pago += i.monto;
+    });
+  });
+  return { pago, cuotas };
+}
+
+function barraLimite(rotulo, usado, limite){
+  // Sin límite cargado no se dibuja barra: una barra vacía se lee como "no debés nada",
+  // que es lo contrario de la verdad.
+  if(!(limite > 0)) return `<div class="lim"><div class="limtop">
+    <span class="limr">${rotulo}</span><span class="limsin">sin límite cargado</span></div></div>`;
+  const pct = Math.min(usado / limite * 100, 100);
+  const alerta = usado / limite >= 0.9;
+  return `<div class="lim"><div class="limtop">
+    <span class="limr">${rotulo}</span>
+    <span class="limn mono">${fmt(usado)} / ${fmt(limite)}</span></div>
+    <div class="bar"><i class="${alerta ? "alerta" : ""}" style="width:${pct}%"></i></div></div>`;
+}
+
 function renderAcc(){
-  $("acclist").innerHTML = cuentas.map(c => `<div class="row">
-    <button class="star" data-def="${c.id}" title="Usar por defecto">${c.def ? "★" : "☆"}</button>
-    <div class="name">${esc(c.nombre)}
-      <span class="sub">${c.tipo === "credito" ? `crédito · cierra ${c.cierre} · paga ${c.venc}` : "débito / efectivo"}</span></div>
-    <button class="del" data-rm="${c.id}">borrar</button></div>`).join("");
+  $("acclist").innerHTML = cuentas.map(c => {
+    const cred = c.tipo === "credito";
+    const u = cred ? usoDeCuenta(c) : null;
+    return `<div class="row" style="display:block">
+      <div class="accrow">
+        <button class="star" data-def="${c.id}" title="Usar por defecto">${c.def ? "★" : "☆"}</button>
+        <div class="name">${esc(c.nombre)}
+          <span class="sub">${cred ? `crédito · cierra ${c.cierre} · paga ${c.venc}` : "débito / efectivo"}</span></div>
+        <button class="lnk" data-edit="${c.id}">editar</button>
+        <button class="del" data-rm="${c.id}">borrar</button>
+      </div>
+      ${cred ? barraLimite("Un pago", u.pago, c.limite_pago)
+             + barraLimite("Cuotas", u.cuotas, c.limite_cuotas)
+             + `<button class="pay" data-resumen="${c.id}" style="margin-top:12px">Pagué el resumen</button>`
+             : ""}</div>`;
+  }).join("");
 }
 
 async function boot(){
