@@ -4,11 +4,12 @@ App de gastos para dos personas: un Worker de Cloudflare que sirve el frontend e
 y atiende la API, con datos en D1. Todo dentro del plan gratuito.
 
 ```
-public/index.html    la app (una sola pantalla, 3 pestañas)
-public/manifest.json  para instalarla en el celular
-src/index.js          Worker: sirve /public y atiende /api/*
-schema.sql             las dos tablas + medios de pago iniciales
-wrangler.toml           config y bindings (D1 y assets)
+public/index.html        la app (una sola pantalla, 4 pestañas)
+public/manifest.json     para instalarla en el celular
+src/index.js             Worker: sirve /public y atiende /api/*
+schema.sql               las tres tablas + medios de pago iniciales
+migracion-servicios.sql  servicios recurrentes, ya aplicada
+wrangler.toml            config y bindings (D1 y assets)
 ```
 
 ## Deploy (una sola vez)
