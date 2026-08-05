@@ -53,7 +53,7 @@ async function api(request, env) {
       return json({ cuentas: cuentas.results, movs: movs.results, servicios: servicios.results });
     }
 
-    if (res === "movs" && m === "POST") {
+    if (res === "movs" && !rid && m === "POST") {
       const b = await request.json();
       const monto = Number(b.monto);
       if (!(monto > 0)) return json({ error: "Monto inválido" }, 400);
@@ -78,7 +78,29 @@ async function api(request, env) {
       return json(row, 201);
     }
 
+    if (res === "movs" && rid && action === "pagar" && m === "POST") {
+      const b = await request.json();
+      const monto = Number(b.monto);
+      if (!(monto > 0)) return json({ error: "Monto inválido" }, 400);
+      const mov = await env.DB.prepare("SELECT * FROM mov WHERE id = ?").bind(rid).first();
+      if (!mov) return json({ error: "Gasto inexistente" }, 404);
+      if (!mov.servicio_id) return json({ error: "Ese gasto no viene de un servicio" }, 400);
+
+      // La fecha no se toca: queda la del vencimiento, así pagar tarde no
+      // cambia el mes al que pertenece el gasto.
+      await env.DB.prepare("UPDATE mov SET monto = ?, estado = 'pagado' WHERE id = ?")
+        .bind(monto, rid).run();
+      return json({ ...mov, monto, estado: "pagado" });
+    }
+
     if (res === "movs" && rid && m === "DELETE") {
+      const mov = await env.DB.prepare("SELECT servicio_id FROM mov WHERE id = ?").bind(rid).first();
+      // Un gasto de servicio no se borra: se marca omitido. Si se borrara, el
+      // INSERT OR IGNORE del próximo arranque lo volvería a crear.
+      if (mov && mov.servicio_id) {
+        await env.DB.prepare("UPDATE mov SET estado = 'omitido' WHERE id = ?").bind(rid).run();
+        return json({ ok: true, omitido: true });
+      }
       await env.DB.prepare("DELETE FROM mov WHERE id = ?").bind(rid).run();
       return json({ ok: true });
     }
@@ -112,6 +134,8 @@ async function api(request, env) {
     if (res === "cuentas" && rid && m === "DELETE") {
       const usada = await env.DB.prepare("SELECT 1 FROM mov WHERE cuenta_id = ? LIMIT 1").bind(rid).first();
       if (usada) return json({ error: "Ese medio tiene gastos cargados" }, 409);
+      const enServicio = await env.DB.prepare("SELECT 1 FROM servicio WHERE cuenta_id = ? LIMIT 1").bind(rid).first();
+      if (enServicio) return json({ error: "Ese medio lo usa un servicio" }, 409);
       await env.DB.prepare("DELETE FROM cuenta WHERE id = ?").bind(rid).run();
       return json({ ok: true });
     }
