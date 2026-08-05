@@ -146,6 +146,8 @@
     </div>
     <div class="sect">Movimientos</div>
     <div class="card" id="mlist"></div>
+    <div class="sect" id="pend-sect" hidden>Pendientes de pagar</div>
+    <div class="card" id="pendientes" hidden></div>
     <div class="sect">Ya comprometido en cuotas</div>
     <div class="card" id="futuro"></div>
   </section>
@@ -268,6 +270,10 @@ const hoyISO = () => { const d = new Date();
 // una boleta de julio sin pagar tiene que seguir avisando en agosto.
 const pendientesVencidos = () => movs.filter(m => m.estado === "pendiente" && m.fecha <= hoyISO());
 
+// Un gasto suma a los totales si es común (estado NULL) o si ya se pagó.
+// Los pendientes y los omitidos quedan afuera: el total del mes es plata que salió.
+const sumaAlTotal = m => !m.estado || m.estado === "pagado";
+
 function showErr(m){ $("err").textContent = m; $("err").hidden = !m; }
 function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("on");
   setTimeout(()=>t.classList.remove("on"), 1800); }
@@ -358,7 +364,7 @@ function renderMonth(){
   const key = ym(cursor);
   $("mlabel").textContent = MESES[cursor.getMonth()] + " " + cursor.getFullYear();
   const filas = [];
-  movs.forEach(m => impactos(m).forEach(i => { if(i.mes === key) filas.push({m, i}); }));
+  movs.filter(sumaAlTotal).forEach(m => impactos(m).forEach(i => { if(i.mes === key) filas.push({m, i}); }));
   const total = filas.reduce((a,f) => a + f.i.monto, 0);
   $("mtotal").textContent = fmt(total);
 
@@ -375,20 +381,36 @@ function renderMonth(){
   $("mlist").innerHTML = filas.length ? filas.map(({m,i}) => {
     const c = cuentas.find(x => x.id === m.cuenta_id) || {nombre:"?"};
     const cuota = i.de > 1 ? `<span class="tag">${i.nro}/${i.de}</span>` : "";
-    return `<div class="row ${m.quien ? "q-"+m.quien : ""}"><div class="name">${esc(m.descripcion)}${cuota}
+    const fijo = m.servicio_id ? `<span class="tag fijo">fijo</span>` : "";
+    return `<div class="row ${m.quien ? "q-"+m.quien : ""}"><div class="name">${esc(m.descripcion)}${cuota}${fijo}
       <span class="sub">${esc(c.nombre)}${m.cat ? " · "+esc(m.cat) : ""} · comprado ${m.fecha.slice(8)}/${m.fecha.slice(5,7)}</span></div>
       <div class="val mono">${fmt(i.monto)}</div>
       <button class="del" data-del="${m.id}">borrar</button></div>`;
   }).join("") : `<div class="empty">Sin movimientos en este mes.</div>`;
 
   const fut = {};
-  movs.forEach(m => impactos(m).forEach(i => { if(i.mes > key && i.de > 1) fut[i.mes] = (fut[i.mes]||0) + i.monto; }));
+  movs.filter(sumaAlTotal).forEach(m => impactos(m).forEach(i => { if(i.mes > key && i.de > 1) fut[i.mes] = (fut[i.mes]||0) + i.monto; }));
   const keys = Object.keys(fut).sort().slice(0,6);
   $("futuro").innerHTML = keys.length ? keys.map(k => {
     const [y, mm] = k.split("-");
     return `<div class="row"><div class="name">${MESES[+mm-1]} ${y}</div>
       <div class="val mono">${fmt(fut[k])}</div></div>`;
   }).join("") : `<div class="empty">No hay cuotas pendientes para los próximos meses.</div>`;
+
+  const pend = movs.filter(m => m.estado === "pendiente" && m.fecha.slice(0,7) === key)
+                   .sort((a,b) => a.fecha < b.fecha ? -1 : 1);
+  const hayPend = pend.length > 0;
+  $("pend-sect").hidden = !hayPend;
+  $("pendientes").hidden = !hayPend;
+  if(hayPend){
+    const totalPend = pend.reduce((a,m) => a + m.monto, 0);
+    $("pendientes").innerHTML = pend.map(m => `<div class="row">
+      <div class="name">${esc(m.descripcion)}
+        <span class="sub">${esc(nombreCuenta(m.cuenta_id))} · vence ${m.fecha.slice(8)}/${m.fecha.slice(5,7)}</span></div>
+      <div class="val mono">${fmt(m.monto)}</div></div>`).join("") +
+      `<div class="row"><div class="name"><b>Falta pagar</b></div>
+        <div class="val mono">${fmt(totalPend)}</div></div>`;
+  }
 }
 
 function renderServicios(){
@@ -492,11 +514,17 @@ $("save").addEventListener("click", async () => {
 
 $("mlist").addEventListener("click", async e => {
   const id = e.target.dataset.del; if(!id) return;
-  if(!confirm("¿Borrar este gasto y todas sus cuotas?")) return;
+  if(!confirm("¿Borrar este gasto? Si viene de un servicio, se saltea solo este mes.")) return;
   try {
-    await api("movs/" + id, "DELETE");
-    movs = movs.filter(m => m.id !== id);
-    showErr(""); renderMonth(); renderUltimos(); toast("Gasto borrado");
+    const r = await api("movs/" + id, "DELETE");
+    if(r.omitido){
+      const mv = movs.find(m => m.id === id);
+      if(mv) mv.estado = "omitido";
+    } else {
+      movs = movs.filter(m => m.id !== id);
+    }
+    showErr(""); renderMonth(); renderUltimos(); renderServicios();
+    toast(r.omitido ? "Salteado este mes" : "Gasto borrado");
   } catch(e){ showErr("No se borró: " + e.message); }
 });
 
