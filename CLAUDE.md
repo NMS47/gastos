@@ -12,10 +12,13 @@ public/index.html       la app entera: HTML + CSS + JS vanilla en un archivo
 public/manifest.json    PWA, para instalarla en el celular
 src/index.js            Worker: sirve /public via env.ASSETS y atiende /api/*
 src/servicios.mjs       lógica pura de servicios (mes en UTC-3, acotado de días)
-src/servicios.test.mjs  únicos tests del proyecto — correr con `node --test` desde la raíz
+src/servicios.test.mjs  tests de servicios — correr con `node --test` desde la raíz
+src/tarjetas.mjs        mesResumenCerrado: a qué resumen corresponde el que acaba de cerrar
+src/tarjetas.test.mjs   tests de tarjetas — mismo `node --test`
 schema.sql              tablas cuenta, mov y servicio + medios de pago iniciales
 migracion-quien.sql     ALTER TABLE suelto, ya aplicado
 migracion-servicios.sql tabla servicio + servicio_id/estado en mov, ya aplicado (2026-08-05)
+migracion-limites.sql   límites y bases en cuenta (pendiente de aplicar en remoto)
 wrangler.toml           main + [assets] + binding D1 (DB) + secret PIN
 ```
 
@@ -28,10 +31,14 @@ modelo Worker + `[assets]`. No reintroducir la carpeta `functions/`.
 ## Modelo de datos
 
 ```sql
-cuenta(id, nombre, tipo, cierre, venc, def)
+cuenta(id, nombre, tipo, cierre, venc, def,
+       limite_pago, limite_cuotas, base_pago, base_cuotas, pagado_hasta)
   tipo: 'debito' (incluye efectivo y billeteras) | 'credito'
   cierre/venc: días del mes, solo para crédito
   def: 1 en el medio de pago preseleccionado al cargar
+  limite_pago / limite_cuotas: topes del banco; NULL = todavía no se cargaron
+  base_pago / base_cuotas: lo que ya se debía antes de usar la app
+  pagado_hasta: YYYY-MM del último resumen pagado; NULL = ninguno
 
 mov(id, fecha, descripcion, monto, cuenta_id, cuotas, cat, quien, servicio_id, estado, creado)
   fecha: YYYY-MM-DD, cuándo se hizo la compra (o el vencimiento, si viene de un servicio)
@@ -104,6 +111,18 @@ enero del año +2 y suman exactamente el total.
   `mesActualAR()` en `src/servicios.mjs` resta 3 horas a mano, porque el Worker corre en
   servidores en UTC. No unificar esto en un `toISOString()` — en uno de los dos entornos
   daría la fecha equivocada cerca de la medianoche.
+- **El límite usado no se guarda, se calcula.** Una sola regla: un gasto ocupa límite hasta
+  que su resumen esté pagado, así que se compara el mes que le asigna `impactos()` contra
+  `pagado_hasta`. Guardar un contador se desincronizaría al borrar o editar un gasto.
+- **Una compra en N cuotas ocupa el total desde el día uno**, no de a una cuota por mes. Es
+  lo que hacen los bancos con el límite de financiación.
+- **"Pagué el resumen" borra `base_pago` pero no `base_cuotas`.** Lo que se debía en un pago
+  entró entero en ese resumen; las cuotas viejas siguen corriendo y la app no conoce su
+  cronograma, así que esa base se baja a mano.
+- **Sin día de cierre, "pagué el resumen" falla en vez de asumir un default.** El mes que se
+  guarda en `pagado_hasta` sale de `mesResumenCerrado()`, que necesita el `cierre` de la
+  tarjeta; sin él no hay forma de saber qué resumen cerró, y asumir un 20 fecharía el pago
+  con el cierre de otra tarjeta y liberaría el límite equivocado sin avisar.
 
 ## Convenciones
 
@@ -126,5 +145,5 @@ Es deliberadamente simple: son dos usuarios en una app familiar.
 - Editar un gasto ya cargado (hoy solo se puede borrar).
 - Editar un servicio ya creado desde la app (hoy solo se puede dar de baja).
 - Reactivar un servicio dado de baja sin entrar a la base a mano.
-- Conciliar contra el resumen real de la tarjeta.
-- Importar el CSV del resumen de Visa.
+- Importar el resumen de la tarjeta para extraer cierre, vencimiento y conciliar gastos.
+  Reemplazaría las bases manuales de los límites.
