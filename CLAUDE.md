@@ -15,7 +15,7 @@ src/servicios.mjs       lógica pura de servicios (mes en UTC-3, acotado de día
 src/servicios.test.mjs  únicos tests del proyecto — correr con `node --test` desde la raíz
 schema.sql              tablas cuenta, mov y servicio + medios de pago iniciales
 migracion-quien.sql     ALTER TABLE suelto, ya aplicado
-migracion-servicios.sql tabla servicio + servicio_id/estado en mov, ya aplicado
+migracion-servicios.sql tabla servicio + servicio_id/estado en mov — leer su cabecera antes de correrla
 wrangler.toml           main + [assets] + binding D1 (DB) + secret PIN
 ```
 
