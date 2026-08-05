@@ -12,8 +12,10 @@ const json = (data, status = 200) =>
 const id = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
 // Materializa los gastos del mes corriente de cada servicio activo.
-// El índice único parcial (servicio_id, mes) hace que repetir esto no duplique nada,
-// así que es seguro llamarlo en cada arranque de la app y desde los dos teléfonos a la vez.
+// El id es determinístico ("sv" + servicio.id + "-" + mes): así la PRIMARY KEY de mov
+// por sí sola impide filas duplicadas, sin depender de que exista el índice único
+// parcial idx_mov_serv_mes. Ese índice queda como respaldo redundante — no lo saques
+// pensando que ya no hace falta, es la segunda barrera si algún día esto se toca.
 async function generarDelMes(env) {
   const mes = mesActualAR();
   const { results } = await env.DB.prepare(
@@ -26,7 +28,7 @@ async function generarDelMes(env) {
     "INSERT OR IGNORE INTO mov (id,fecha,descripcion,monto,cuenta_id,cuotas,cat,quien,servicio_id,estado,creado) " +
     "VALUES (?,?,?,?,?,1,?,NULL,?,?,?)"
   ).bind(
-    id(), fechaDeServicio(mes, s.dia), s.nombre, s.monto,
+    "sv" + s.id + "-" + mes, fechaDeServicio(mes, s.dia), s.nombre, s.monto,
     s.cuenta_id, s.cat, s.id, estadoInicial(s.modo), creado
   )));
 }
@@ -93,7 +95,7 @@ async function api(request, env) {
       return json({ ...mov, monto, estado: "pagado" });
     }
 
-    if (res === "movs" && rid && m === "DELETE") {
+    if (res === "movs" && rid && !action && m === "DELETE") {
       const mov = await env.DB.prepare("SELECT servicio_id FROM mov WHERE id = ?").bind(rid).first();
       // Un gasto de servicio no se borra: se marca omitido. Si se borrara, el
       // INSERT OR IGNORE del próximo arranque lo volvería a crear.
@@ -164,6 +166,10 @@ async function api(request, env) {
       await env.DB.prepare(
         "INSERT INTO servicio (id,nombre,monto,dia,cuenta_id,cat,modo,activo,desde,creado) VALUES (?,?,?,?,?,?,?,1,?,?)"
       ).bind(row.id, row.nombre, row.monto, row.dia, row.cuenta_id, row.cat, row.modo, row.desde, row.creado).run();
+      // Genera ya el gasto del mes corriente para este servicio, si corresponde:
+      // si no, un alta a fin de mes se queda sin boleta hasta el próximo GET /api/state.
+      // INSERT OR IGNORE hace que esto sea gratis para los servicios que ya la tienen.
+      await generarDelMes(env);
       return json(row, 201);
     }
 
