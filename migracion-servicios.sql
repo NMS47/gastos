@@ -1,6 +1,12 @@
+-- Solo si la base ya existe y NO tiene las columnas 'servicio_id', 'estado' ni el índice 'idx_mov_serv_mes'.
 -- Servicios recurrentes mensuales.
 -- Correr una sola vez:
 --   npx wrangler d1 execute gastos --remote --file=./migracion-servicios.sql
+--
+-- Si falla a la mitad (p. ej., error de conexión entre statements):
+-- 1. Verificar qué columnas ya existen: PRAGMA table_info(mov);
+-- 2. Verificar si el índice existe: SELECT name FROM sqlite_master WHERE type='index' AND name='idx_mov_serv_mes';
+-- 3. Correr manualmente solo los statements que faltan, no el archivo completo (evita "duplicate column name").
 
 CREATE TABLE IF NOT EXISTS servicio (
   id        TEXT PRIMARY KEY,
