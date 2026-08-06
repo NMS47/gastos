@@ -69,6 +69,10 @@
   .payrow input{flex:1; font-size:16px; padding:9px 10px}
   .off{opacity:.5}
   .total .big{font-family:'JetBrains Mono',monospace; font-size:34px; font-weight:700; letter-spacing:-.02em}
+  .falta{display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+    margin-top:12px; padding-top:12px; border-top:1px solid var(--line)}
+  .falta .rot{font-size:13px; color:var(--muted)}
+  .falta .val{font-size:19px; font-weight:700; color:var(--ink)}
   .navmonth{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:14px}
   .navmonth button{background:var(--surface); border:1px solid var(--line); border-radius:10px;
     width:44px; height:40px; font-size:18px; color:var(--ink)}
@@ -168,6 +172,7 @@
     <div class="card">
       <div class="total"><div class="big mono" id="fijototal">$0</div></div>
       <p class="hint" id="fijodet"></p>
+      <div class="falta" id="faltapagar" hidden></div>
     </div>
     <div class="sect">Débito automático</div>
     <div class="card" id="servauto"></div>
@@ -435,6 +440,15 @@ function renderServicios(){
   $("fijodet").textContent = act.length
     ? `automáticos ${fmt(suma(auto))} · los pagás vos ${fmt(suma(man))}`
     : "Cargá los servicios para saber cuánto les sale fijo por mes.";
+
+  // Solo los manuales generan pendientes: estadoInicial hace nacer 'pagado' a los
+  // automáticos. Así que todo mov 'pendiente' ya es un manual sin pagar, y no hace falta
+  // cruzar contra la tabla servicio. Incluye los vencidos arrastrados de meses anteriores
+  // y los de servicios dados de baja: es la plata que falta que salga de verdad.
+  const falta = movs.filter(m => m.estado === "pendiente")
+                    .reduce((a, m) => a + m.monto, 0);
+  $("faltapagar").hidden = falta === 0;
+  $("faltapagar").innerHTML = `<span class="rot">Falta pagar</span><span class="val mono">${fmt(falta)}</span>`;
 
   $("servauto").innerHTML = auto.length ? auto.map(s => `<div class="row">
     <div class="name">${esc(s.nombre)}
