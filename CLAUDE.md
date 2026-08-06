@@ -105,6 +105,15 @@ enero del año +2 y suman exactamente el total.
   asigna `impactos()`.** Un servicio en tarjeta de crédito puede vencer en agosto y aparecer
   en el resumen de septiembre; el aviso tiene que sonar cuando hay que pagarlo, no cuando
   impacta en el resumen.
+- **El total "falta pagar" de la pestaña Servicios no filtra por servicio.** Solo los
+  manuales generan pendientes, así que todo `mov` en estado `'pendiente'` ya es un manual
+  sin pagar. Incluye los arrastrados de meses anteriores, a diferencia del "Total a vencer"
+  de la pestaña Mes, que suma solo el mes corriente. Los dos números difieren cuando hay
+  atrasados, y está bien: responden preguntas distintas.
+- **El tag "pagado" va solo en los servicios manuales.** Los automáticos nacen `'pagado'` el
+  día que se generan, no el día que se debitan: el gasto de Netflix se crea el 1 del mes con
+  fecha 25 y ya marcado pagado. Un tag ahí diría "pagado" tres semanas antes de que salga la
+  plata.
 - **La fecha de hoy se calcula distinto en el frontend y en el Worker, a propósito.**
   `hoyISO()` en `index.html` usa los componentes locales del navegador
   (`getFullYear/getMonth/getDate`), porque el celular ya está en hora argentina.
