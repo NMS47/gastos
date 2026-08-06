@@ -18,7 +18,7 @@ src/tarjetas.test.mjs   tests de tarjetas — mismo `node --test`
 schema.sql              tablas cuenta, mov y servicio + medios de pago iniciales
 migracion-quien.sql     ALTER TABLE suelto, ya aplicado
 migracion-servicios.sql tabla servicio + servicio_id/estado en mov, ya aplicado (2026-08-05)
-migracion-limites.sql   límites y bases en cuenta (pendiente de aplicar en remoto)
+migracion-limites.sql   límites y bases en cuenta, ya aplicado (2026-08-06)
 wrangler.toml           main + [assets] + binding D1 (DB) + secret PIN
 ```
 
