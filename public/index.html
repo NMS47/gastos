@@ -462,11 +462,19 @@ function renderServicios(){
       (m.fecha.slice(0,7) < mes || !act.some(s => s.id === m.servicio_id)))
     .sort((a,b) => a.fecha < b.fecha ? -1 : 1);
 
-  const filaVencida = m => `<div class="row">
-    <div class="name">${esc(m.descripcion)}<span class="tag venc">vencido</span>
-      <span class="sub">${esc(nombreCuenta(m.cuenta_id))} · venció el ${m.fecha.slice(8)}/${m.fecha.slice(5,7)}</span></div>
-    <div class="val mono">${fmt(m.monto)}</div>
-    <button class="pay" data-pay="${m.id}">Pagar</button></div>`;
+  // Ojo: la lista de arriba junta dos cosas distintas. Los pendientes de meses anteriores
+  // sí vencieron, pero los de un servicio dado de baja pueden tener fecha futura: se dio
+  // de baja a mitad de mes y el gasto ya estaba generado. Solo los que ya pasaron llevan
+  // el tag rojo, con el mismo umbral que usa filaMes.
+  const filaVencida = m => {
+    const vencido = m.fecha <= hoyISO();
+    const dm = `${m.fecha.slice(8)}/${m.fecha.slice(5,7)}`;
+    return `<div class="row">
+      <div class="name">${esc(m.descripcion)}${vencido ? `<span class="tag venc">vencido</span>` : ""}
+        <span class="sub">${esc(nombreCuenta(m.cuenta_id))} · ${vencido ? "venció" : "vence"} el ${dm}</span></div>
+      <div class="val mono">${fmt(m.monto)}</div>
+      <button class="pay" data-pay="${m.id}">Pagar</button></div>`;
+  };
 
   const filaMes = s => {
     const mv = movs.find(m => m.servicio_id === s.id && m.fecha.slice(0,7) === mes);
