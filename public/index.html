@@ -60,6 +60,7 @@
     padding:2px 6px; border-radius:5px; background:#EDEDF8; color:var(--credit); margin-left:6px}
   .tag.fijo{background:#E6F0EE; color:var(--accent)}
   .tag.venc{background:#FBEAE6; color:var(--danger)}
+  .tag.pago{background:#E6F0EE; color:var(--accent)}
   .dot{display:inline-block; width:7px; height:7px; border-radius:50%;
     background:var(--danger); margin-left:5px; vertical-align:middle}
   .pay{background:var(--accent); color:#fff; border:none; border-radius:8px;
@@ -460,13 +461,17 @@ function renderServicios(){
       <div class="val mono">${fmt(s.monto)}</div>
       <button class="del" data-off="${s.id}">baja</button></div>`;
     const vencidoEsteMes = mv.estado === "pendiente" && mv.fecha <= hoyISO();
-    const estado = mv.estado === "pagado" ? "pagado"
-      : mv.estado === "omitido" ? "salteado este mes"
+    const pagado = mv.estado === "pagado";
+    // Cuando está pagado el tag ya lo dice: repetirlo en el sub sería decir dos veces lo
+    // mismo en la fila más angosta de la app.
+    const estado = mv.estado === "omitido" ? "salteado este mes"
       : vencidoEsteMes ? "venció el " + mv.fecha.slice(8) + "/" + mv.fecha.slice(5,7)
       : "vence " + mv.fecha.slice(8);
+    const sub = pagado ? esc(nombreCuenta(s.cuenta_id))
+      : `${esc(nombreCuenta(s.cuenta_id))} · ${estado}`;
     return `<div class="row${mv.estado === "omitido" ? " off" : ""}">
-      <div class="name">${esc(s.nombre)}${vencidoEsteMes ? `<span class="tag venc">vencido</span>` : ""}
-        <span class="sub">${esc(nombreCuenta(s.cuenta_id))} · ${estado}</span></div>
+      <div class="name">${esc(s.nombre)}${vencidoEsteMes ? `<span class="tag venc">vencido</span>` : ""}${pagado ? `<span class="tag pago">pagado</span>` : ""}
+        <span class="sub">${sub}</span></div>
       <div class="val mono">${fmt(mv.monto)}</div>
       ${mv.estado === "pendiente" ? `<button class="pay" data-pay="${mv.id}">Pagar</button>` : ""}
       <button class="del" data-off="${s.id}">baja</button></div>`;
