@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { impactos, ym } from "../public/calculo.mjs";
+import { impactos, ym, vigenteEn, consumos } from "../public/calculo.mjs";
 
 const visa = { id: "v", tipo: "credito", cierre: 20 };
 const efectivo = { id: "e", tipo: "debito" };
@@ -54,4 +54,68 @@ test("la suma de las cuotas da exactamente el total", () => {
 test("un mov sin cuenta se cuenta en el mes de compra, sin explotar", () => {
   const r = impactos({ fecha: "2026-10-05", monto: 1000, cuotas: 1 }, undefined);
   assert.deepEqual(r, [{ mes: "2026-10", monto: 1000, nro: 1, de: 1 }]);
+});
+
+test("vigenteEn: sin hasta, corre desde desde y para siempre", () => {
+  const f = { activo: 1, desde: "2026-10", hasta: null };
+  assert.equal(vigenteEn(f, "2026-09"), false);
+  assert.equal(vigenteEn(f, "2026-10"), true);
+  assert.equal(vigenteEn(f, "2030-01"), true);
+});
+
+test("vigenteEn: desde igual a hasta corre un solo mes", () => {
+  const f = { activo: 1, desde: "2026-11", hasta: "2026-11" };
+  assert.equal(vigenteEn(f, "2026-10"), false);
+  assert.equal(vigenteEn(f, "2026-11"), true);
+  assert.equal(vigenteEn(f, "2026-12"), false);
+});
+
+test("vigenteEn: dado de baja no corre, aunque el hasta no haya llegado", () => {
+  assert.equal(vigenteEn({ activo: 0, desde: "2026-01", hasta: "2027-02" }, "2026-10"), false);
+});
+
+test("consumos: suma por categoria, por fecha de compra", () => {
+  const movs = [
+    { fecha: "2026-10-05", monto: 100, cat: "Supermercado" },
+    { fecha: "2026-10-20", monto: 50, cat: "Supermercado" },
+    { fecha: "2026-11-01", monto: 999, cat: "Supermercado" }
+  ];
+  assert.deepEqual(consumos(movs, "2026-10"), { Supermercado: 150 });
+});
+
+test("consumos: una compra en 12 cuotas consume el total en el mes de compra", () => {
+  const movs = [{ fecha: "2026-10-05", monto: 1200, cuotas: 12, cat: "Hogar" }];
+  assert.deepEqual(consumos(movs, "2026-10"), { Hogar: 1200 });
+});
+
+test("consumos: un pendiente consume, un omitido no", () => {
+  const movs = [
+    { fecha: "2026-10-28", monto: 100, cat: "Auto", estado: "pendiente" },
+    { fecha: "2026-10-28", monto: 500, cat: "Auto", estado: "omitido" },
+    { fecha: "2026-10-10", monto: 30, cat: "Auto", estado: "pagado" }
+  ];
+  assert.deepEqual(consumos(movs, "2026-10"), { Auto: 130 });
+});
+
+test("consumos: un gasto personal no consume ningun tope", () => {
+  const movs = [{ fecha: "2026-10-05", monto: 100, cat: "Ropa", ambito: "personal" }];
+  assert.deepEqual(consumos(movs, "2026-10"), {});
+});
+
+test("consumos: los sin categoria van a la clave vacia", () => {
+  const movs = [
+    { fecha: "2026-10-05", monto: 12, cat: null },
+    { fecha: "2026-10-06", monto: 8, cat: "" }
+  ];
+  assert.deepEqual(consumos(movs, "2026-10"), { "": 20 });
+});
+
+// Review Focus 1: un mov sin fecha no puede dejar la cascada en blanco.
+test("consumos: ignora un mov con fecha ausente o mal formada", () => {
+  const movs = [
+    { monto: 999, cat: "Supermercado" },
+    { fecha: "", monto: 999, cat: "Supermercado" },
+    { fecha: "2026-10-05", monto: 100, cat: "Supermercado" }
+  ];
+  assert.deepEqual(consumos(movs, "2026-10"), { Supermercado: 100 });
 });

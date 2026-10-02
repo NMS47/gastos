@@ -22,3 +22,45 @@ export function impactos(mov, cuenta) {
   }
   return out;
 }
+
+// Un servicio o un ingreso corre en `mes`?
+// `hasta` es un final previsto desde el alta; `activo = 0` es una baja decidida
+// en el camino. Hacen falta los dos: ver la spec.
+export function vigenteEn(fila, mes) {
+  if (!fila.activo) return false;
+  if (fila.desde > mes) return false;
+  if (fila.hasta && fila.hasta < mes) return false;
+  return true;
+}
+
+// El mes de una fecha "YYYY-MM-DD", o null si la fecha no sirve. Exportada porque
+// cascada() tambien filtra por mes y tiene que tratar una fecha rota igual que acá.
+export const mesDe = f =>
+  (typeof f === "string" && /^\d{4}-\d{2}-\d{2}$/.test(f) ? f.slice(0, 7) : null);
+
+// Cuanto se consumio de cada categoria en `mes`, por FECHA DE COMPRA y por el monto
+// completo: una compra en 12 cuotas consume el total en el mes que se decidio.
+// La barra mide plata comprometida, no plata que salio, asi que un `pendiente`
+// cuenta — al contrario del total del mes. Un `omitido` no.
+// La clave "" junta los gastos sin categoria: son la bandeja de entrada.
+export function consumos(movs, mes) {
+  const out = {};
+  for (const m of movs) {
+    if (m.ambito === "personal") continue;
+    if (m.estado === "omitido") continue;
+    if (mesDe(m.fecha) !== mes) continue;
+    const k = m.cat || "";
+    out[k] = (out[k] || 0) + m.monto;
+  }
+  return out;
+}
+
+export function diasDelMes(mes) {
+  const [y, m] = mes.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+export function fechaDeServicio(mes, dia) {
+  const d = Math.min(Math.max(parseInt(dia) || 1, 1), diasDelMes(mes));
+  return mes + "-" + String(d).padStart(2, "0");
+}
