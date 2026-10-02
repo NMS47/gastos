@@ -12,9 +12,59 @@ import path from "node:path";
 // no verifica que la UI se vea bien: solo que el módulo se pueda evaluar sin explotar.
 // Sirve para index.html hoy y para cualquier script de frontend futuro (tareas 9 a 14)
 // que se quiera sumar a esta misma red.
+//
+// IMPORTANTE: el `fetch` de mentira resuelve con datos reales (no rechaza). Si rechazara,
+// boot() cae directo al catch y cuentas/movs quedan en [] toda la corrida: fillSelects,
+// renderLoad, renderMonth y usoDeCuenta se ejecutarían, pero sus imp()/impactos() nunca
+// se llamarían de verdad porque los forEach serían sobre arrays vacíos. Este test existe
+// específicamente para ejercitar esos call sites, así que el mock de abajo tiene que
+// darles datos: una cuenta de crédito con cierre, un gasto en cuotas sobre ella, un
+// servicio pendiente y uno omitido.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const indexPath = path.join(__dirname, "..", "public", "index.html");
+
+// Payload de /api/state, con los mismos nombres de columna que devuelve `SELECT *` en
+// src/index.js (ver schema.sql y migracion-presupuesto.sql: mov tiene `ambito`, servicio
+// tiene `hasta`). Un solo objeto acá arriba para que sea fácil sumarle `ingresos`/`topes`
+// cuando las tareas 6, 7 y 9 los agreguen a la respuesta real.
+const ESTADO_MOCK = {
+  cuentas: [
+    { id: "ef", nombre: "Efectivo", tipo: "debito", cierre: null, venc: null, def: 0,
+      limite_pago: null, limite_cuotas: null, base_pago: 0, base_cuotas: 0, pagado_hasta: null },
+    // def:1 a propósito: fillSelects() deja esta cuenta preseleccionada en el <select>,
+    // así renderLoad() entra sola a la rama esCred sin que el test tenga que simular un
+    // click. Con cierre:20 ejercita exactamente el umbral que impactos() decide.
+    { id: "vi", nombre: "Visa", tipo: "credito", cierre: 20, venc: 5, def: 1,
+      limite_pago: null, limite_cuotas: null, base_pago: 0, base_cuotas: 0, pagado_hasta: null },
+  ],
+  movs: [
+    // Débito, una sola cuota: pasa por la rama no-crédito de impactos().
+    { id: "m1", fecha: "2026-09-15", descripcion: "Supermercado", monto: 5000, cuenta_id: "ef",
+      cuotas: 1, cat: "Supermercado", quien: "nico", servicio_id: null, estado: null,
+      creado: "2026-09-15T10:00:00.000Z", ambito: null },
+    // Crédito en 6 cuotas: el único mov que de verdad hace recorrer el loop de cuotas de
+    // impactos() dentro de renderMonth (filas y fut) y de usoDeCuenta.
+    { id: "m2", fecha: "2026-09-10", descripcion: "Heladera", monto: 300000, cuenta_id: "vi",
+      cuotas: 6, cat: "Hogar", quien: "dani", servicio_id: null, estado: null,
+      creado: "2026-09-10T12:00:00.000Z", ambito: null },
+    // Generado por un servicio manual, todavía sin pagar: no suma a sumaAlTotal, pero
+    // ejercita la rama de servicios pendientes en renderServicios.
+    { id: "sv-srv1-2026-09", fecha: "2026-09-25", descripcion: "Netflix", monto: 4000,
+      cuenta_id: "vi", cuotas: 1, cat: "Suscripciones", quien: null, servicio_id: "srv1",
+      estado: "pendiente", creado: "2026-09-01T00:00:00.000Z", ambito: null },
+    // Generado por un servicio y salteado ese mes: ejercita la rama "omitido".
+    { id: "sv-srv2-2026-09", fecha: "2026-09-05", descripcion: "Gimnasio", monto: 8000,
+      cuenta_id: "ef", cuotas: 1, cat: "Salud", quien: null, servicio_id: "srv2",
+      estado: "omitido", creado: "2026-09-01T00:00:00.000Z", ambito: null },
+  ],
+  servicios: [
+    { id: "srv1", nombre: "Netflix", monto: 4000, dia: 25, cuenta_id: "vi", cat: "Suscripciones",
+      modo: "manual", activo: 1, desde: "2026-01", creado: "2026-01-01T00:00:00.000Z", hasta: null },
+    { id: "srv2", nombre: "Gimnasio", monto: 8000, dia: 5, cuenta_id: "ef", cat: "Salud",
+      modo: "manual", activo: 1, desde: "2026-01", creado: "2026-01-01T00:00:00.000Z", hasta: null },
+  ],
+};
 
 // Saca el cuerpo del único <script type="module"> de index.html. Si en algún momento
 // hay más de uno, mejor que este test explote con un mensaje claro a que elija el
@@ -85,7 +135,9 @@ function fakeElement() {
   });
 }
 
-function instalarStubsDeNavegador() {
+// Instala los stubs globales y devuelve getElementById para que el test, antes de
+// importar, pueda precargar algún input como lo haría una persona tipeando.
+function instalarStubsDeNavegador(estadoMock) {
   const cache = new Map();
   const getElementById = (id) => {
     if (!cache.has(id)) cache.set(id, fakeElement());
@@ -98,16 +150,36 @@ function instalarStubsDeNavegador() {
     addEventListener: () => {},
   };
   globalThis.localStorage = { getItem: () => null, setItem: () => {} };
-  // Rechaza siempre: api() la atrapa con su propio try/catch (boot también tiene el
-  // suyo), así que esto no debería dejar ninguna promesa sin atrapar.
-  globalThis.fetch = () => Promise.reject(new Error("fetch no disponible en el smoke test"));
+  // Resuelve con datos reales: api() espera un objeto con status/ok/json(), como un
+  // Response de verdad. boot() necesita que esto resuelva (no que rechace) para que
+  // cuentas/movs/servicios se llenen y los render* corran con datos.
+  globalThis.fetch = () => Promise.resolve({
+    status: 200, ok: true,
+    json: () => Promise.resolve(estadoMock),
+  });
   globalThis.window = globalThis;
   globalThis.confirm = () => false;
   globalThis.prompt = () => null;
+  return { getElementById };
 }
 
-test('el <script type="module"> de index.html evalúa sin explotar (modo estricto)', async () => {
-  instalarStubsDeNavegador();
+// boot() no se exporta ni se puede await-ear desde afuera: es un fire-and-forget al
+// final del script. Como ahora el fetch resuelve (no rechaza), hay una cadena real de
+// promesas después del import() (await fetch → await r.json() → await api() en boot())
+// antes de que corran fillSelects/renderLoad/renderMonth/renderServicios/renderAcc. Un
+// setTimeout de un número fijo de ms sería una carrera contra esa cadena. En cambio,
+// esto le da vueltas al event loop encadenando setImmediate: cada vuelta vacía la cola de
+// microtasks pendiente antes de la siguiente, así que después de unas pocas vueltas la
+// cadena de boot() —que es de 3-4 saltos— ya terminó. Está acotado (no es un while
+// infinito) pero no es un reloj: no le importa cuánto tiempo real pasa, solo que el loop
+// dé suficientes vueltas.
+async function drenarEventLoop(vueltas = 30) {
+  for (let i = 0; i < vueltas; i++) await new Promise((r) => setImmediate(r));
+}
+
+async function evaluarScriptFrontend(estadoMock, { precargarForm } = {}) {
+  const { getElementById } = instalarStubsDeNavegador(estadoMock);
+  if (precargarForm) precargarForm(getElementById);
 
   const html = readFileSync(indexPath, "utf8");
   const codigo = extraerScriptModulo(html);
@@ -124,15 +196,24 @@ test('el <script type="module"> de index.html evalúa sin explotar (modo estrict
 
   try {
     await import(pathToFileURL(tempPath).href);
-    // boot() sigue corriendo de fondo después de que el import termina (el fetch
-    // rechaza, se atrapa, y sigue con fillSelects/render*). Le damos una vuelta al
-    // event loop para que, si algo ahí explota, lo agarre el listener de arriba
-    // mientras el test todavía está corriendo, en vez de escaparse después.
-    await new Promise((r) => setTimeout(r, 50));
+    await drenarEventLoop();
   } finally {
     process.off("unhandledRejection", onRejection);
     rmSync(tempPath, { force: true });
   }
 
-  assert.deepEqual(erroresNoControlados, []);
+  return erroresNoControlados;
+}
+
+test('el <script type="module"> de index.html evalúa sin explotar (modo estricto, con datos reales)', async () => {
+  const errores = await evaluarScriptFrontend(ESTADO_MOCK, {
+    // Nadie tipeó nada en el form de "Cargar": sin esto, $("monto").value sigue en ""
+    // y renderLoad() nunca llama a impactos() aunque la cuenta preseleccionada sea de
+    // crédito. Simula que ya hay un monto y una cantidad de cuotas cargados.
+    precargarForm: (getElementById) => {
+      getElementById("monto").value = "9000";
+      getElementById("cuotas").value = "3";
+    },
+  });
+  assert.deepEqual(errores, []);
 });
