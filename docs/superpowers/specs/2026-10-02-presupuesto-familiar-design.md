@@ -105,13 +105,30 @@ a estar en la misma pantalla:
 Si la barra dejara los pendientes afuera, el día 1 el tope de Auto se vería vacío aunque el
 seguro ya esté comprometido, y daría permiso para gastar en nafta una plata que no está.
 
+**Una compra en cuotas consume el tope completo en el mes de compra, no de a una cuota.** Una
+heladera de 1.200.000 en 12 cuotas consume 1.200.000 del tope de Hogar en octubre, y la barra va a
+decir que se pasaron por mucho. Es a propósito, por tres razones: el tope limita lo que se *decide*
+gastar en el mes, y en 12 cuotas se decidió gastar 1.200.000; es lo que la app ya hace con el
+límite de financiación de la tarjeta; y financiar en cuotas no tiene que sentirse gratis este mes,
+que es justamente el hábito que están tratando de cortar.
+
 ### Sobre qué no se resta dos veces
 
 - **Un servicio pagado con tarjeta ya está dentro del resumen** y no se resta como línea aparte.
   Es la regla que la app ya tiene para el pago del resumen, aplicada a los servicios.
 - **El resumen lo calcula la app, no se carga a mano.** Sale de `impactos()`, que ya sabe en qué
-  resumen cae cada cuota. Lo único que se carga a mano es la deuda anterior a la app, que ya
-  tiene su lugar en `cuenta.base_pago` y `cuenta.base_cuotas`.
+  resumen cae cada cuota.
+- **La línea de tarjeta incluye `base_pago` pero no `base_cuotas`.** `base_pago` es lo que se debía
+  en un pago antes de la app, y entra entero en el primer resumen que todavía no está pagado.
+  `base_cuotas` son cuotas viejas corriendo cuyo cronograma la app **no conoce**: no hay forma de
+  saber cuánto de eso cae en octubre y cuánto en diciembre, así que repartirlo sería inventar.
+  Queda afuera.
+- **Consecuencia práctica, y hay que decirla porque afecta los primeros meses:** mientras haya
+  `base_cuotas` sin desglosar, la línea de tarjeta de la cascada va a ser **más baja que el resumen
+  real**, y el presupuesto personal va a salir más optimista de lo que es. La salida no es código:
+  es cargar las compras viejas de la tarjeta que todavía tienen cuotas pendientes como `mov` reales
+  con su cantidad de cuotas, y poner `base_cuotas` en cero. Ahí la app calcula todo y la línea
+  cuadra con el banco. Conviene hacerlo junto con la migración.
 
 ### Sobre el modelo
 
@@ -227,8 +244,11 @@ Mendoza: "Impuestos" no es, y "Otros" haría que la línea más grande de la cas
 
 - **El número grande pasa a ser "queda para dividir"**, que es el que buscan. Lo gastado baja a
   línea chica. Es una pérdida consciente: hoy el número grande es lo gastado.
-- Las barras de tope van en el lugar donde hoy está el desglose por categoría, que mide contra el
-  total del mes. Pasan a medir contra el tope.
+- **Las barras de tope son un bloque nuevo.** Hoy no hay ningún desglose por categoría: el bloque
+  `#pormedio` que está abajo del total desglosa **por medio de pago** (`porC[f.m.cuenta_id]`,
+  `index.html:391`), y mide contra el total del mes. Ese bloque se queda como está — dice cuánto
+  está cargando cada tarjeta, que es otra pregunta útil.
+- Los bloques "Movimientos", "Vencen este mes" y "Ya comprometido en cuotas" tampoco cambian.
 - **Tocar una barra edita ese tope ahí mismo.** Es el lugar donde uno se da cuenta de que el tope
   está mal, no una pantalla de configuración.
 - Cuando el mes da positivo, el bloque "cada uno" dice `Nico: te quedan 172.000 de 212.500` en
@@ -395,6 +415,7 @@ En `src/calculo.test.mjs`, con `node --test` desde la raíz.
 ### `consumos()`
 
 - un gasto de crédito consume el tope del mes de compra, no del mes de impacto
+- una compra en 12 cuotas consume el tope completo en el mes de compra, no una cuota
 - un gasto sin categoría no consume ningún tope
 - un gasto personal no consume ningún tope
 - un gasto `pendiente` **sí** consume tope (está comprometido), al contrario del total del mes
@@ -404,6 +425,7 @@ En `src/calculo.test.mjs`, con `node --test` desde la raíz.
 ### `cascada()`
 
 - un servicio pagado con tarjeta no se resta dos veces
+- la línea de tarjeta suma `base_pago` si el resumen del mes no está pagado, y nunca `base_cuotas`
 - el tope de una categoría consume los servicios de esa categoría
 - una categoría sin tope resta lo determinado tal cual
 - un gasto familiar sin categoría cae en "sin tope" y no desaparece
