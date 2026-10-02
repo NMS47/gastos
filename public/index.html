@@ -265,7 +265,8 @@
 </nav>
 <div class="toast" id="toast"></div>
 
-<script>
+<script type="module">
+import { impactos, ym } from "./calculo.mjs";
 const CATS = ["Supermercado","Comida afuera","Auto","Transporte","Servicios",
   "Alquiler / Expensas","Hogar","Salud","Deudas","Educación","Ropa","Viajes",
   "Ocio / Paseo","Suscripciones","Regalos","Impuestos","Mascotas","Otros"];
@@ -275,7 +276,6 @@ const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto"
 let cuentas = [], movs = [], servicios = [], cursor = new Date();
 const $ = id => document.getElementById(id);
 const fmt = n => "$" + Math.round(n).toLocaleString("es-AR");
-const ym = d => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
 const esc = s => String(s).replace(/[<>&]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
 
 const nombreCuenta = cid => (cuentas.find(x => x.id === cid) || {nombre:"?"}).nombre;
@@ -309,20 +309,8 @@ async function api(path, method = "GET", body, reintento){
   return data;
 }
 
-// Un gasto en crédito se reparte en los meses de resumen que corresponden.
-function impactos(m){
-  const c = cuentas.find(x => x.id === m.cuenta_id);
-  const d = new Date(m.fecha + "T12:00:00");
-  if(!c || c.tipo !== "credito") return [{mes: ym(d), monto: m.monto, nro:1, de:1}];
-  const mesCiclo = d.getMonth() + (d.getDate() <= (c.cierre || 20) ? 1 : 2);
-  const n = m.cuotas || 1, base = Math.round(m.monto / n), out = [];
-  for(let i = 0; i < n; i++){
-    const f = new Date(d.getFullYear(), mesCiclo + i, 1);
-    out.push({ mes: ym(f), nro: i+1, de: n,
-      monto: i === n-1 ? m.monto - base*(n-1) : base });
-  }
-  return out;
-}
+// Resuelve la cuenta y delega en el módulo. Los llamadores no cambian de forma.
+const imp = m => impactos(m, cuentas.find(x => x.id === m.cuenta_id));
 
 function parseMonto(v){
   if(!v) return 0;
@@ -357,7 +345,7 @@ function renderLoad(){
   if(!esCred) $("cuotas").value = "1";
   const monto = parseMonto($("monto").value);
   if(esCred && monto > 0 && $("fecha").value){
-    const im = impactos({cuenta_id:c.id, fecha:$("fecha").value, monto, cuotas:+$("cuotas").value});
+    const im = impactos({fecha:$("fecha").value, monto, cuotas:+$("cuotas").value}, c);
     const [y, mm] = im[0].mes.split("-");
     $("hint").innerHTML = im.length > 1
       ? `<b>${im.length} cuotas de ${fmt(im[0].monto)}</b> — la primera entra en el resumen de ${MESES[+mm-1]} ${y}.`
@@ -380,7 +368,7 @@ function renderMonth(){
   const key = ym(cursor);
   $("mlabel").textContent = MESES[cursor.getMonth()] + " " + cursor.getFullYear();
   const filas = [];
-  movs.filter(sumaAlTotal).forEach(m => impactos(m).forEach(i => { if(i.mes === key) filas.push({m, i}); }));
+  movs.filter(sumaAlTotal).forEach(m => imp(m).forEach(i => { if(i.mes === key) filas.push({m, i}); }));
   const total = filas.reduce((a,f) => a + f.i.monto, 0);
   $("mtotal").textContent = fmt(total);
 
@@ -405,7 +393,7 @@ function renderMonth(){
   }).join("") : `<div class="empty">Sin movimientos en este mes.</div>`;
 
   const fut = {};
-  movs.filter(sumaAlTotal).forEach(m => impactos(m).forEach(i => { if(i.mes > key && i.de > 1) fut[i.mes] = (fut[i.mes]||0) + i.monto; }));
+  movs.filter(sumaAlTotal).forEach(m => imp(m).forEach(i => { if(i.mes > key && i.de > 1) fut[i.mes] = (fut[i.mes]||0) + i.monto; }));
   const keys = Object.keys(fut).sort().slice(0,6);
   $("futuro").innerHTML = keys.length ? keys.map(k => {
     const [y, mm] = k.split("-");
@@ -515,7 +503,7 @@ function usoDeCuenta(c){
   const corte = c.pagado_hasta || "";
   let pago = c.base_pago || 0, cuotas = c.base_cuotas || 0;
   movs.filter(sumaAlTotal).filter(m => m.cuenta_id === c.id).forEach(m => {
-    impactos(m).forEach(i => {
+    imp(m).forEach(i => {
       if(i.mes <= corte) return;
       if(i.de > 1) cuotas += i.monto; else pago += i.monto;
     });
