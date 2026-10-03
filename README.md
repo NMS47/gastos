@@ -4,11 +4,14 @@ App de gastos para dos personas: un Worker de Cloudflare que sirve el frontend e
 y atiende la API, con datos en D1. Todo dentro del plan gratuito.
 
 ```
-public/index.html        la app (una sola pantalla, 4 pestañas)
+public/index.html        la app (una sola pantalla, 5 pestañas)
+public/calculo.mjs       la aritmética: cuotas, topes y la cascada del mes
 public/manifest.json     para instalarla en el celular
 src/index.js             Worker: sirve /public y atiende /api/*
-schema.sql               las tres tablas + medios de pago iniciales
+schema.sql               tablas cuenta, mov y servicio + medios de pago iniciales
 migracion-servicios.sql  servicios recurrentes, ya aplicada
+migracion-limites.sql    límites de las tarjetas y bases previas, ya aplicada
+migracion-presupuesto.sql  topes, ingresos y gasto personal — pendiente de aplicar
 wrangler.toml            config y bindings (D1 y assets)
 ```
 
@@ -61,6 +64,13 @@ Un gasto se guarda una sola vez, con su fecha de compra. El mes en que impacta s
 calcula al mostrar: débito/efectivo impacta el día de la compra; tarjeta de crédito
 entra en el resumen según el día de cierre, y cada cuota suma un mes más. El pago del
 resumen no se carga como gasto — el total de la tarjeta ya es la suma de sus cuotas.
+
+La pestaña *Mes* además muestra una cascada: a los ingresos del mes se le resta el
+resumen de tarjeta que se paga, los compromisos y servicios de categorías sin tope, y
+la suma de los topes por categoría; lo que queda se divide 50/50 entre Nico y Dani.
+Cada categoría con tope (se configuran en *Plan*) tiene una barra que se llena con lo
+comprometido en esa categoría ese mes, no con lo que ya se pagó — así avisa antes de
+que la plata salga, no después.
 
 ## Cambios comunes
 

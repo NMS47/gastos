@@ -8,17 +8,22 @@ Reemplaza una planilla Excel con una hoja por mes que se volvió inmanejable.
 Un solo Worker de Cloudflare. Sin framework, sin build step, sin dependencias en runtime.
 
 ```
-public/index.html       la app entera: HTML + CSS + JS vanilla en un archivo
+public/index.html       HTML + CSS + render. La aritmética está en calculo.mjs
+public/calculo.mjs      aritmética pura: impactos, vigenteEn, consumos, cascada, anchoBarra
 public/manifest.json    PWA, para instalarla en el celular
 src/index.js            Worker: sirve /public via env.ASSETS y atiende /api/*
 src/servicios.mjs       lógica pura de servicios (mes en UTC-3, acotado de días)
 src/servicios.test.mjs  tests de servicios — correr con `node --test` desde la raíz
 src/tarjetas.mjs        mesResumenCerrado: a qué resumen corresponde el que acaba de cerrar
 src/tarjetas.test.mjs   tests de tarjetas — mismo `node --test`
+src/calculo.test.mjs    tests de calculo.mjs — mismo `node --test`
+src/frontend.test.mjs   humo del <script type="module"> de index.html — mismo `node --test`
 schema.sql              tablas cuenta, mov y servicio + medios de pago iniciales
 migracion-quien.sql     ALTER TABLE suelto, ya aplicado
 migracion-servicios.sql tabla servicio + servicio_id/estado en mov, ya aplicado (2026-08-05)
 migracion-limites.sql   límites y bases en cuenta, ya aplicado (2026-08-06)
+migracion-presupuesto.sql  topes, ingresos, servicio.hasta, mov.ambito — TODAVÍA NO APLICADO
+  en producción, pendiente de correr a mano
 wrangler.toml           main + [assets] + binding D1 (DB) + secret PIN
 ```
 
@@ -40,7 +45,8 @@ cuenta(id, nombre, tipo, cierre, venc, def,
   base_pago / base_cuotas: lo que ya se debía antes de usar la app
   pagado_hasta: YYYY-MM del último resumen pagado; NULL = ninguno
 
-mov(id, fecha, descripcion, monto, cuenta_id, cuotas, cat, quien, servicio_id, estado, creado)
+mov(id, fecha, descripcion, monto, cuenta_id, cuotas, cat, quien, servicio_id, estado, creado,
+    ambito)
   fecha: YYYY-MM-DD, cuándo se hizo la compra (o el vencimiento, si viene de un servicio)
   quien: 'nico' | 'dani', para pintar la fila; NULL en los gastos que genera un servicio
   servicio_id: de qué servicio salió; NULL si es un gasto suelto
@@ -48,19 +54,39 @@ mov(id, fecha, descripcion, monto, cuenta_id, cuotas, cat, quien, servicio_id, e
     'pendiente' — generado, todavía sin pagar; no suma al total del mes
     'pagado'    — pagado (o debitado, si el servicio es 'auto'); suma al total del mes
     'omitido'   — se salteó ese mes a propósito; no suma y no se regenera
+  ambito: 'personal' | NULL = familiar. Un gasto personal no suma a ningún total familiar
+    y no consume ningún tope. Eje distinto de `quien`: `quien` es quién lo cargó (para
+    pintar la fila), `ambito` es de quién es la plata. Un gasto familiar también tiene
+    `quien`. Mezclar los dos ejes es el error que tenía la planilla vieja.
 
-servicio(id, nombre, monto, dia, cuenta_id, cat, modo, activo, desde, creado)
+servicio(id, nombre, monto, dia, cuenta_id, cat, modo, activo, desde, creado, hasta)
   monto: lo que se espera pagar cada mes
   dia: día del mes que vence o se debita (1-31)
   modo: 'auto' (débito automático, el gasto nace 'pagado') | 'manual' (lo pagan ellos,
     nace 'pendiente')
   activo: 0 tras dar de baja — deja de generar gastos nuevos, no borra el historial
   desde: YYYY-MM, primer mes que corresponde (el mes de alta)
+  hasta: YYYY-MM, último mes que corresponde; NULL = sin fin. Un compromiso (la cuota de
+    una deuda, un pago único) no es una tabla nueva: es un servicio con `hasta`. Un pago
+    único es un servicio que dura un mes (desde = hasta); saltearlo es el `omitido` que ya
+    existe. `activo` y `hasta` no son lo mismo y hacen falta los dos: `hasta` es un final
+    previsto desde el alta (la deuda dura siete cuotas y se sabe), `activo = 0` es una baja
+    decidida en el camino que no estaba en el plan. Mezclarlos obligaría a reescribir
+    `hasta` para dar algo de baja, perdiendo el dato de hasta cuándo tenía que durar.
+
+ingreso(id, nombre, monto, dia, desde, hasta, activo, creado)
+  monto: lo que entra cada mes; dia: solo informativo, no dispara nada
+  desde/hasta: mismo significado que en servicio. Un ingreso eventual (el aguinaldo) es
+    desde = hasta; uno que no se sabe cuándo cae simplemente no se carga, así la cascada
+    nunca cuenta plata que no existe
+
+tope(cat, monto)
+  cat: una categoría de CATS, PRIMARY KEY. Sin fila = sin tope para esa categoría
 ```
 
 **No existe tabla de cuotas.** El impacto se calcula al renderizar, en la función
-`impactos()` de `index.html`. Es la decisión central del diseño: un gasto en cuotas se
-carga una sola vez y aparece solo en los N meses siguientes.
+`impactos()` de `public/calculo.mjs`. Es la decisión central del diseño: un gasto en
+cuotas se carga una sola vez y aparece solo en los N meses siguientes.
 
 Regla:
 - Cuenta de débito → impacta el mismo día de la compra.
@@ -69,9 +95,10 @@ Regla:
 - El monto de cada cuota es `round(total/n)`, y la última absorbe el redondeo para que
   la suma dé exacta.
 
-Si se toca `impactos()`, verificar estos casos: compra el día 4 con cierre 20 → resumen
-del mes siguiente; el día 25 → dos meses después; 12 cuotas desde diciembre terminan en
-enero del año +2 y suman exactamente el total.
+Ojo con el ejemplo de los 12 meses: 12 cuotas desde diciembre terminan en **diciembre del
+año siguiente** si la compra fue antes del cierre, y en **enero del año +2** si fue
+después — un mes más porque esa compra ya arrancó en el resumen siguiente. Las dos ramas
+están fijadas con test. Si se toca `impactos()`, correr `node --test`.
 
 ## Reglas de negocio que no son obvias
 
@@ -81,8 +108,18 @@ enero del año +2 y suman exactamente el total.
 - **Categoría y persona son ejes distintos.** La planilla vieja mezclaba "Super"/"Casa"
   con "Dani"/"Valen". Las categorías son una lista fija (`CATS` en `index.html`), nunca
   texto libre. Los medios de pago sí se editan desde la app.
-- **No hay ingresos.** Solo gastos, a propósito. Agregarlos requiere una columna `tipo`
-  en `mov` y sumar/restar en los totales.
+- **Los ingresos viven en su propia tabla (`ingreso`), no en una columna `tipo` de `mov`.**
+  Con tabla aparte, `mov` sigue significando exactamente *plata que sale* y ninguna de las
+  consultas que ya funcionan necesita un filtro nuevo. Con una columna `tipo`, cada total
+  pasaría a necesitar un `WHERE` extra y el día que se olvide uno los números se inflan
+  sin avisar.
+- **`quien` es una configuración del teléfono, no un campo del formulario.** Sale de
+  `localStorage.getItem("quien")`, se fija una vez en la pestaña "Este teléfono" y de ahí
+  en más viaja solo en cada gasto que se carga desde ese aparato. Es lo que permite que el
+  toggle "personal" no necesite un selector de persona al lado: el dueño del gasto personal
+  es quien sea que esté usando el teléfono. La misma limitación que ya tienen los colores
+  de fila (`.q-nico`/`.q-dani`): si alguna vez comparten un teléfono, la atribución —y con
+  el gasto personal, de quién es la plata— queda mal.
 - **Los gastos de servicio se generan solos, al vuelo.** No hay una fila guardada de
   antemano por servicio y mes: cada `GET /api/state` corre `generarDelMes()`, que inserta
   las que falten del mes corriente antes de responder. `POST /api/servicios` también la
@@ -132,6 +169,65 @@ enero del año +2 y suman exactamente el total.
   guarda en `pagado_hasta` sale de `mesResumenCerrado()`, que necesita el `cierre` de la
   tarjeta; sin él no hay forma de saber qué resumen cerró, y asumir un 20 fecharía el pago
   con el cierre de otra tarjeta y liberaría el límite equivocado sin avisar.
+- **La regla única de los topes: con tope se reserva todo, sin tope se resta lo
+  determinado.** Si una categoría tiene tope, se reserva el tope completo y todo lo de esa
+  categoría lo consume — servicios incluidos. Si no tiene tope, se resta lo determinado tal
+  cual. Una sola regla resuelve lo que parecían tres excepciones: Auto mezcla gastos fijos
+  (seguro, patente) y sueltos (nafta) en la misma barra sin separarlos; un pago único como
+  la escritura se resta entero porque su categoría no tiene tope, sin inventarle uno; y
+  Servicios no lleva tope a propósito, porque nadie quiere ponerle un límite a lo que cobra
+  la luz.
+- **Los topes y el resumen de tarjeta miden con relojes distintos, a propósito.** Los topes
+  se miden por fecha de compra, sin importar el medio de pago; el resumen de tarjeta se
+  resta en el mes en que se paga. El tope tiene que sonar cuando se decide gastar — en la
+  caja del súper — no 40 días después cuando llega el resumen. Consecuencia: mientras dure
+  la transición de bajar el uso de la tarjeta, un mes carga el supermercado de agosto
+  (dentro del resumen) y reserva el de octubre (dentro de los topes) a la vez. No es doble
+  conteo: es lo que pasa en la vida real cuando se vive con la tarjeta, se paga el pasado y
+  se compromete el presente en el mismo mes. La doble carga se va encogiendo sola a medida
+  que baja el uso de tarjeta.
+- **Un gasto `pendiente` consume el tope de su categoría aunque no sume al total del mes.**
+  Ya está comprometido — el seguro del auto que vence el 28 va a salir seguro — y el tope
+  existe justamente para que esa plata no se prometa dos veces. Es lo contrario de lo que
+  hace el total del mes, que deja los pendientes afuera porque todavía no salieron. Un
+  `omitido` no consume tope: se salteó a propósito, esa plata no sale.
+- **Una compra en cuotas consume el tope completo en el mes de compra, no una cuota por
+  mes.** Mismo criterio que ya usa la app con el límite de financiación de la tarjeta: el
+  tope limita lo que se *decide* gastar, y en 12 cuotas se decidió gastar el total. Financiar
+  no tiene que sentirse gratis este mes — es justo el hábito que esto ayuda a cortar.
+- **`base_cuotas` nunca entra en la línea de tarjeta de la cascada.** Son cuotas viejas
+  corriendo cuyo cronograma la app no conoce, así que repartirlas por mes sería inventar.
+  Consecuencia práctica: mientras haya `base_cuotas` sin desglosar, la línea de tarjeta
+  queda más baja que el resumen real y el presupuesto personal sale más optimista de lo que
+  es. La salida no es código: cargar esas compras viejas como `mov` reales con su cantidad
+  de cuotas y poner `base_cuotas` en cero.
+- **El reparto personal es fijo del día 1, 50/50, no uno en vivo sobre lo gastado.** La app
+  calcula `ingresos − tarjeta − sin tope − topes` y lo divide por dos desde el primer día
+  del mes. El tope de una categoría se reserva completo aunque no se haya gastado nada
+  todavía, así que el número no se mueve según lo que el otro cargó ayer: un número que
+  cambia todos los días no sirve para dejar de discutir, que es el problema que esto
+  resuelve. El mes puede dar negativo, y se muestra negativo — un cero piadoso escondería
+  justo lo que hay que ver.
+- **La condición de vigencia está duplicada a propósito entre el SQL de `generarDelMes()`
+  (en `src/index.js`) y `vigenteEn()` en `public/calculo.mjs`.** Una corre en SQLite para
+  generar los gastos reales del mes corriente, la otra en el navegador para proyectar
+  servicios de meses futuros que todavía no tienen fila en `mov`; ninguna puede llamar a la
+  otra. Si se cambia una regla de vigencia (`activo`, `desde`, `hasta`), hay que cambiar las
+  dos o un servicio queda vigente en una y no en la otra.
+- **`parseMonto()` (en `public/calculo.mjs`) trata el punto siempre como separador de
+  miles, y la coma solo a veces como decimal.** Un punto nunca es decimal: `"1.700.000"` es
+  un millón setecientos mil, no 1,7. Una coma es decimal únicamente cuando es la última del
+  string y la siguen 1 o 2 dígitos (`"600,50"`, pegado de un resumen de banco); en cualquier
+  otro caso —incluidas todas las comas que vengan antes de esa última— es separador de
+  miles. La regla es asimétrica a propósito: en es-AR el punto jamás es decimal, así que no
+  hace falta mirar qué lo sigue; la coma sí puede serlo, así que hay que mirar. Colapsarla a
+  "la coma siempre es decimal" es el bug que ya pasó dos veces: `"1.700.000"` se leía como
+  1.7.
+- **`fmt()` (en `public/calculo.mjs`) pone el signo antes del símbolo de pesos:
+  `-$200.000`, no `$-200.000`.** El número más grande de la cascada (lo que queda para
+  dividir) se vuelve negativo justo cuando el mes no cubre sus compromisos, así que es lo
+  primero que alguien ve en ese caso, y `$-200.000` lee como un error de la app en vez de
+  como una plata que falta.
 
 ## Convenciones
 
@@ -151,8 +247,15 @@ Es deliberadamente simple: son dos usuarios en una app familiar.
 
 ## Cosas pendientes / ideas
 
-- Editar un gasto ya cargado (hoy solo se puede borrar).
-- Editar un servicio ya creado desde la app (hoy solo se puede dar de baja).
+- Editar el monto, la fecha o la descripción de un gasto ya cargado (hoy solo se puede
+  reclasificar `cat`/`ambito` desde la bandeja "Sin tope", o borrarlo).
+- Editar un servicio ya creado desde la app (el `PATCH /api/servicios/:id` existe, falta
+  la UI).
 - Reactivar un servicio dado de baja sin entrar a la base a mano.
 - Importar el resumen de la tarjeta para extraer cierre, vencimiento y conciliar gastos.
   Reemplazaría las bases manuales de los límites.
+- Multi-moneda para la deuda en USD (hoy se carga en pesos y se ajusta a mano cuando se
+  mueve el dólar).
+- Reparto distinto a 50/50.
+- Historial de topes (hoy un mes pasado se calcula con los topes de hoy).
+- Repartir el sobrante de un tope a fin de mes, cuando se gastó menos de lo reservado.
