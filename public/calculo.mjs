@@ -155,19 +155,22 @@ export function anchoBarra(consumido, tope) {
   return Math.min(100, Math.round(consumido / tope * 100));
 }
 
-// El monto que escribió una persona, nunca con decimales en esta app (CLAUDE.md:
-// "Montos con toLocaleString('es-AR'), sin decimales", y fmt() redondea todo lo que
-// muestra). Por eso un punto o una coma SIEMPRE es separador de miles y se descarta:
-// no hay forma de pedir un decimal real desde este campo, así que no hace falta
-// distinguir "1.700.000" (un millón setecientos mil) de un decimal inexistente.
-// El único caso que cambia de comportamiento es un decimal explícito como "600,50":
-// antes daba 600.5, ahora da 60050. Es la contracara intencional del arreglo: se pierde
-// algo que la convención dice que no existe, a cambio de arreglar separadores de miles
-// reales ("600.000", "1.700.000") que antes truncaban el monto. No "arreglar" esto de
-// vuelta a tratar el punto/coma como decimal: eso es el bug original.
+// El punto y la coma no son intercambiables en es-AR, aunque esta app casi nunca
+// muestre decimales (CLAUDE.md: "Montos con toLocaleString('es-AR'), sin decimales").
+// El punto SIEMPRE es separador de miles: nadie escribe "1.7" para un millón setecientos
+// mil, así que se descarta sin condición. La coma es ambigua — "600,000" son seiscientos
+// mil, pero "600,50" son seiscientos pesos con cincuenta centavos (p. ej. pegado de un
+// resumen de banco) — así que se decide por la cantidad de dígitos que la siguen: si
+// al final del string hay una coma seguida de 1 o 2 dígitos, es un decimal real y se
+// convierte en punto; si la siguen 3 dígitos (o la coma no es la última), es separador
+// de miles y se descarta igual que el punto. Tratarlos igual sin mirar los dígitos fue
+// el bug de la primera vuelta: "600.000,50" (seiscientos mil con cincuenta) se convertía
+// en 60000050, cien veces de más.
 export function parseMonto(v) {
   if (!v) return 0;
-  const s = String(v).trim().replace(/\s/g, "").replace(/[.,]/g, "");
+  let s = String(v).trim().replace(/\s/g, "").replace(/\./g, "");
+  const decimal = s.match(/,(\d{1,2})$/);
+  s = decimal ? s.slice(0, decimal.index) + "." + decimal[1] : s.replace(/,/g, "");
   const n = parseFloat(s);
   return isFinite(n) && n > 0 ? n : 0;
 }

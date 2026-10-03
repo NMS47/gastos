@@ -335,8 +335,20 @@ test("parseMonto: dos puntos de miles en el mismo monto", () => {
   assert.equal(parseMonto("1.700.000"), 1700000);
 });
 
-test("parseMonto: punto y coma juntos se tratan igual, los dos de miles", () => {
-  assert.equal(parseMonto("600.000,50"), 60000050);
+test("parseMonto: punto de miles y coma decimal de dos dígitos juntos", () => {
+  assert.equal(parseMonto("600.000,50"), 600000.5);
+});
+
+test("parseMonto: una coma seguida de dos dígitos al final es decimal", () => {
+  assert.equal(parseMonto("600,50"), 600.5);
+});
+
+test("parseMonto: una coma seguida de un solo dígito al final también es decimal", () => {
+  assert.equal(parseMonto("1.234,5"), 1234.5);
+});
+
+test("parseMonto: la misma coma con tres dígitos detrás es de miles, no decimal", () => {
+  assert.equal(parseMonto("1.234,567"), 1234567);
 });
 
 test("parseMonto: texto no numerico da 0", () => {
