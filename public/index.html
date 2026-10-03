@@ -350,6 +350,13 @@ const pendientesVencidos = () => movs.filter(m => m.estado === "pendiente" && m.
 // Los pendientes y los omitidos quedan afuera: el total del mes es plata que salió.
 const sumaAlTotal = m => !m.estado || m.estado === "pagado";
 
+// Personal no suma a ningún total FAMILIAR (Gastado, por medio de pago, Movimientos,
+// Ya comprometido en cuotas, Vencen este mes): la plata sigue saliendo de la cuenta —
+// por eso sumaAlTotal no cambia, y usoDeCuenta() de la tarjeta tampoco — pero no es
+// plata de la casa. No se usa en renderUltimos a propósito: "Últimos cargados" es la
+// lista de lo que se tipeó, no un total.
+const esFamiliar = m => m.ambito !== "personal";
+
 function showErr(m){ $("err").textContent = m; $("err").hidden = !m; }
 function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("on");
   setTimeout(()=>t.classList.remove("on"), 1800); }
@@ -496,7 +503,7 @@ function renderMonth(){
     </select></div>`).join("");
 
   const filas = [];
-  movs.filter(sumaAlTotal).forEach(m => imp(m).forEach(i => { if(i.mes === key) filas.push({m, i}); }));
+  movs.filter(m => sumaAlTotal(m) && esFamiliar(m)).forEach(m => imp(m).forEach(i => { if(i.mes === key) filas.push({m, i}); }));
   const total = filas.reduce((a,f) => a + f.i.monto, 0);
   $("mgastado").textContent = `Gastado: ${fmt(total)}`;
 
@@ -521,7 +528,7 @@ function renderMonth(){
   }).join("") : `<div class="empty">Sin movimientos en este mes.</div>`;
 
   const fut = {};
-  movs.filter(sumaAlTotal).forEach(m => imp(m).forEach(i => { if(i.mes > key && i.de > 1) fut[i.mes] = (fut[i.mes]||0) + i.monto; }));
+  movs.filter(m => sumaAlTotal(m) && esFamiliar(m)).forEach(m => imp(m).forEach(i => { if(i.mes > key && i.de > 1) fut[i.mes] = (fut[i.mes]||0) + i.monto; }));
   const keys = Object.keys(fut).sort().slice(0,6);
   $("futuro").innerHTML = keys.length ? keys.map(k => {
     const [y, mm] = k.split("-");
@@ -529,7 +536,7 @@ function renderMonth(){
       <div class="val mono">${fmt(fut[k])}</div></div>`;
   }).join("") : `<div class="empty">No hay cuotas pendientes para los próximos meses.</div>`;
 
-  const pend = movs.filter(m => m.estado === "pendiente" && m.fecha.slice(0,7) === key)
+  const pend = movs.filter(m => m.estado === "pendiente" && esFamiliar(m) && m.fecha.slice(0,7) === key)
                    .sort((a,b) => a.fecha < b.fecha ? -1 : 1);
   const hayPend = pend.length > 0;
   $("pend-sect").hidden = !hayPend;
