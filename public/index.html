@@ -184,6 +184,7 @@
 
   <section id="v-plan" hidden>
     <h1>Plan del mes</h1>
+    <p class="hint" id="planmlabel" style="margin:-6px 0 14px; font-weight:700; color:var(--ink)"></p>
     <div class="sect">Ingresos</div>
     <div class="card" id="ingresos-list"></div>
     <div class="card">
@@ -559,6 +560,10 @@ function renderMonth(){
 }
 
 function renderPlan(){
+  // El cursor es el mismo que usa la pestaña Mes: si se navegó a diciembre ahí y se
+  // entra a Plan sin volver a octubre, "Total del mes" y el desde de un ingreso nuevo
+  // van a diciembre sin que se vea en ningún lado. Mismo texto que mlabel.
+  $("planmlabel").textContent = MESES[cursor.getMonth()] + " " + cursor.getFullYear();
   const vig = ingresos.filter(i => vigenteEn(i, ym(cursor)));
   const tot = vig.reduce((a,i) => a + i.monto, 0);
   $("ingresos-list").innerHTML = ingresos.length
