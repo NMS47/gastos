@@ -156,8 +156,11 @@
       <button id="next" aria-label="Mes siguiente">›</button>
     </div>
     <div class="card">
-      <label style="margin:0">Total del mes</label>
+      <label style="margin:0">Queda para dividir</label>
       <div class="total"><div class="big mono" id="mtotal">$0</div></div>
+      <p class="hint" id="mfalta"></p>
+      <p class="hint" id="mgastado"></p>
+      <div id="cascada"></div>
       <div id="pormedio"></div>
     </div>
     <div class="sect">Movimientos</div>
@@ -301,7 +304,7 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { impactos, ym, vigenteEn } from "./calculo.mjs";
+import { impactos, ym, vigenteEn, cascada } from "./calculo.mjs";
 const CATS = ["Supermercado","Comida afuera","Auto","Transporte","Servicios",
   "Alquiler / Expensas","Hogar","Salud","Deudas","Educación","Ropa","Viajes",
   "Ocio / Paseo","Suscripciones","Regalos","Impuestos","Mascotas","Otros"];
@@ -402,10 +405,32 @@ function renderUltimos(){
 function renderMonth(){
   const key = ym(cursor);
   $("mlabel").textContent = MESES[cursor.getMonth()] + " " + cursor.getFullYear();
+
+  // El tercer argumento es el mes corriente: la cascada lo necesita para saber si tiene
+  // que proyectar los servicios (en un mes futuro todavia no tienen fila en mov).
+  const c = cascada({ movs, cuentas, ingresos, servicios, topes }, key, hoyISO().slice(0,7));
+
+  $("mtotal").textContent = fmt(c.queda);
+  $("mtotal").style.color = c.queda < 0 ? "var(--danger)" : "";
+  $("mfalta").textContent = c.queda < 0
+    ? `Faltan ${fmt(-c.queda)} para cubrir el mes.`
+    : `Cada uno: ${fmt(c.cadaUno)}.`;
+
+  const lineas = [
+    ["Ingresos", c.ingresos],
+    ["Tarjeta", -c.tarjeta],
+    ...c.sinTope.map(s => [s.cat || "Sin categoría", -s.monto]),
+    ["Topes", -c.totalTopes]
+  ].filter(([, v]) => v !== 0);
+
+  $("cascada").innerHTML = lineas.map(([n, v]) => `<div class="row" style="border:none;padding:4px 0">
+    <div class="name">${esc(n)}</div>
+    <div class="val mono" style="${v < 0 ? "color:var(--muted)" : ""}">${v < 0 ? "−" : ""}${fmt(Math.abs(v))}</div></div>`).join("");
+
   const filas = [];
   movs.filter(sumaAlTotal).forEach(m => imp(m).forEach(i => { if(i.mes === key) filas.push({m, i}); }));
   const total = filas.reduce((a,f) => a + f.i.monto, 0);
-  $("mtotal").textContent = fmt(total);
+  $("mgastado").textContent = `Gastado: ${fmt(total)}`;
 
   const porC = {};
   filas.forEach(f => porC[f.m.cuenta_id] = (porC[f.m.cuenta_id]||0) + f.i.monto);
