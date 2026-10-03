@@ -435,19 +435,19 @@ function renderMonth(){
   const porC = {};
   filas.forEach(f => porC[f.m.cuenta_id] = (porC[f.m.cuenta_id]||0) + f.i.monto);
   $("pormedio").innerHTML = Object.entries(porC).sort((a,b) => b[1]-a[1]).map(([cid,v]) => {
-    const c = cuentas.find(x => x.id === cid) || {nombre:"?"};
+    const cta = cuentas.find(x => x.id === cid) || {nombre:"?"};
     return `<div style="margin-top:12px"><div class="row" style="border:none;padding:0">
-      <div class="name">${esc(c.nombre)}</div><div class="val mono">${fmt(v)}</div></div>
+      <div class="name">${esc(cta.nombre)}</div><div class="val mono">${fmt(v)}</div></div>
       <div class="bar"><i style="width:${total ? v/total*100 : 0}%"></i></div></div>`;
   }).join("");
 
   filas.sort((a,b) => a.m.fecha < b.m.fecha ? 1 : -1);
   $("mlist").innerHTML = filas.length ? filas.map(({m,i}) => {
-    const c = cuentas.find(x => x.id === m.cuenta_id) || {nombre:"?"};
+    const cta = cuentas.find(x => x.id === m.cuenta_id) || {nombre:"?"};
     const cuota = i.de > 1 ? `<span class="tag">${i.nro}/${i.de}</span>` : "";
     const fijo = m.servicio_id ? `<span class="tag fijo">fijo</span>` : "";
     return `<div class="row ${m.quien ? "q-"+m.quien : ""}"><div class="name">${esc(m.descripcion)}${cuota}${fijo}
-      <span class="sub">${esc(c.nombre)}${m.cat ? " · "+esc(m.cat) : ""} · comprado ${m.fecha.slice(8)}/${m.fecha.slice(5,7)}</span></div>
+      <span class="sub">${esc(cta.nombre)}${m.cat ? " · "+esc(m.cat) : ""} · comprado ${m.fecha.slice(8)}/${m.fecha.slice(5,7)}</span></div>
       <div class="val mono">${fmt(i.monto)}</div>
       <button class="del" data-del="${m.id}">borrar</button></div>`;
   }).join("") : `<div class="empty">Sin movimientos en este mes.</div>`;
