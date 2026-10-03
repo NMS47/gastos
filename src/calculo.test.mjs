@@ -196,6 +196,40 @@ test("cascada: la tarjeta suma base_pago si el resumen del mes no esta pagado", 
   assert.equal(cascada(d, "2026-10").tarjeta, 0);
 });
 
+// Review de rama completa: un servicio de tarjeta de credito dejaba de aparecer en la
+// cascada a partir de mesCorriente + 2, porque movsDelMes solo proyectaba el mes que se
+// estaba mirando y nunca el mes intermedio cuya compra cae en el resumen de ese mes.
+test("cascada: un servicio de tarjeta sigue en la linea de tarjeta dos meses adelante", () => {
+  const d = base();
+  d.servicios = [{ id: "nf", activo: 1, desde: "2026-01", hasta: null, nombre: "Netflix",
+    monto: 15000, dia: 10, cuenta_id: "v", cat: "Suscripciones", modo: "auto" }];
+  // La fila real de octubre ya existe (generarDelMes del mes corriente).
+  d.movs = [{ id: "svnf-2026-10", fecha: "2026-10-10", monto: 15000, cuotas: 1,
+    cat: "Suscripciones", cuenta_id: "v", servicio_id: "nf", estado: "pagado" }];
+  assert.equal(cascada(d, "2026-11").tarjeta, 15000);  // la fila real de octubre
+  assert.equal(cascada(d, "2026-12").tarjeta, 15000);  // antes daba 0: el bug
+});
+
+test("cascada: un servicio de tarjeta sigue en la linea de tarjeta tres meses adelante", () => {
+  const d = base();
+  d.servicios = [{ id: "nf", activo: 1, desde: "2026-01", hasta: null, nombre: "Netflix",
+    monto: 15000, dia: 10, cuenta_id: "v", cat: "Suscripciones", modo: "auto" }];
+  d.movs = [{ id: "svnf-2026-10", fecha: "2026-10-10", monto: 15000, cuotas: 1,
+    cat: "Suscripciones", cuenta_id: "v", servicio_id: "nf", estado: "pagado" }];
+  assert.equal(cascada(d, "2027-01").tarjeta, 15000);  // antes daba 0: el bug
+});
+
+// El mismo caso con un servicio de DEBITO es el que ya existia antes de esta rama, y es
+// justamente por que el bug de arriba nunca se vio: una cuenta de debito no pasa por el
+// loop de tarjeta, asi que proyectar solo `mes` ya le alcanzaba.
+test("cascada: un mes futuro lejano resta un servicio de debito aunque no tenga fila", () => {
+  const d = base();
+  d.servicios = [{ id: "s", activo: 1, desde: "2026-01", hasta: null, nombre: "Luz",
+    monto: 90000, dia: 10, cuenta_id: "e", cat: "Servicios", modo: "auto" }];
+  const c = cascada(d, "2026-12");
+  assert.deepEqual(c.sinTope, [{ cat: "Servicios", monto: 90000 }]);
+});
+
 test("cascada: base_cuotas nunca entra en la linea de tarjeta", () => {
   const d = base();
   d.cuentas[0].base_cuotas = 900000;

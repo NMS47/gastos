@@ -86,6 +86,28 @@ export function movsDelMes(movs, servicios, mes, mesCorriente) {
   return movs.concat(proyectados);
 }
 
+// Un mes más (o menos, con n negativo) que `mes`, en formato "YYYY-MM".
+const ymMas = (mes, n) => {
+  const [y, m] = mes.split("-").map(Number);
+  return ym(new Date(y, m - 1 + n, 1));
+};
+
+// Proyecta no solo `mes`, sino cada mes entre mesCorriente+1 y `mes` (los dos inclusive).
+// La tarjeta lo necesita: una compra con tarjeta de crédito no impacta en el mes en que
+// se decide, sino uno o dos meses después, según el cierre. Pedirle a movsDelMes
+// proyección solo de `mes` deja afuera la compra del mes anterior que es justamente la
+// que cae en el resumen de `mes` — por eso un servicio de tarjeta desaparecía de la
+// cascada a partir de mesCorriente + 2. Fuera de la tarjeta nadie necesita este rango:
+// los topes y la bandeja miden por fecha de compra dentro de `mes` nomás, así que siguen
+// usando movsDelMes de un solo mes.
+export function movsHastaMes(movs, servicios, mes, mesCorriente) {
+  if (mes <= mesCorriente) return movs;
+  let out = movs;
+  for (let m = ymMas(mesCorriente, 1); m <= mes; m = ymMas(m, 1))
+    out = movsDelMes(out, servicios, m, mesCorriente);
+  return out;
+}
+
 // Las líneas del mes. La regla única: si una categoría tiene tope se reserva el tope
 // completo y todo lo de esa categoría lo consume; si no tiene tope se resta lo
 // determinado tal cual. Un gasto de crédito ya está contado en la línea de tarjeta del
@@ -100,8 +122,12 @@ export function cascada({ movs, cuentas, ingresos, servicios, topes }, mes, mesC
   // El resumen que se paga en `mes`: las cuotas que caen acá, más base_pago si ese
   // resumen todavía no se pagó. base_cuotas nunca entra: la app no conoce su cronograma,
   // así que repartirlo por mes sería inventar. Ver la spec.
+  // Usa movsHastaMes, no `todos`: un servicio de tarjeta de un mes intermedio (entre
+  // mesCorriente y `mes`) todavía no tiene fila propia, y sin proyectarlo impactos() no
+  // tiene nada que ubicar en el resumen de `mes`.
+  const todosTarjeta = movsHastaMes(movs, servicios, mes, mesCorriente);
   let tarjeta = 0;
-  for (const m of todos) {
+  for (const m of todosTarjeta) {
     const c = credito.get(m.cuenta_id);
     if (!c || !familiar(m) || !mesDe(m.fecha)) continue;
     for (const i of impactos(m, c)) if (i.mes === mes) tarjeta += i.monto;
