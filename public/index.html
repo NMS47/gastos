@@ -950,10 +950,24 @@ $("ingresos-list").addEventListener("click", async e => {
   } catch(err){ showErr("No se borró: " + err.message); }
 });
 
+// parseMonto no distingue "no lo pude leer" de "es cero": las dos cosas devuelven 0.
+// "abc" da 0 porque no hay ningún número; "$600.000" también da 0, pero por otra razón
+// — el "$" adelante rompe parseFloat — y ese sí es un número, pegado de un resumen o de
+// esta misma app. Ninguno de los dos es un cero deliberado. Se distinguen ANTES de
+// mandar el PUT, no mirando si hay algún dígito (eso no alcanza: "$600.000" tiene
+// dígitos) sino mirando si, sacando puntos/comas/espacios, lo que queda es una fila de
+// ceros no más. Si no lo es, parseMonto devolvió 0 porque no entendió el string, no
+// porque el string dijera "cero".
+const esMontoIlegible = v => parseMonto(v) === 0 && !/^0+$/.test(v.replace(/[.,\s]/g, ""));
+
 // `change` y no `input`: guarda al salir del campo, no en cada tecla.
 $("topes-list").addEventListener("change", async e => {
   const cat = e.target.dataset.cat; if(!cat) return;
   const v = e.target.value.trim();
+  if(v && esMontoIlegible(v)){
+    showErr("Ese tope no se entiende: poné un número.");
+    return;
+  }
   try {
     if(!v){
       await api("topes/" + encodeURIComponent(cat), "DELETE");
@@ -980,6 +994,10 @@ $("topesmes").addEventListener("click", async e => {
   const v = prompt(`Tope de ${cat}`, actual ? actual.monto : "");
   if(v === null) return;
   const s = v.trim();
+  if(s && esMontoIlegible(s)){
+    showErr("Ese tope no se entiende: poné un número.");
+    return;
+  }
   try {
     if(!s){
       await api("topes/" + encodeURIComponent(cat), "DELETE");
