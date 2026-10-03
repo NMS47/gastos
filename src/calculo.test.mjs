@@ -351,6 +351,27 @@ test("parseMonto: la misma coma con tres dígitos detrás es de miles, no decima
   assert.equal(parseMonto("1.234,567"), 1234567);
 });
 
+// Una coma de miles ANTES de la coma decimal no tiene que sobrevivir: parseFloat corta
+// en la primera coma que encuentra, así que si no se limpia el prefijo entero "1,234,50"
+// se lee como "1,234.50" y da 1 en vez de 1234.5 — mal en silencio, sin error y sin 0.
+test("parseMonto: una coma de miles antes de la coma decimal no corrompe el resultado", () => {
+  assert.equal(parseMonto("1,234,50"), 1234.5);
+});
+
+test("parseMonto: dos comas de miles antes de la coma decimal", () => {
+  assert.equal(parseMonto("600,500,25"), 600500.25);
+});
+
+test("parseMonto: tres comas de miles antes de la coma decimal", () => {
+  assert.equal(parseMonto("1,2,3,45"), 123.45);
+});
+
+// Probe propia: una coma de miles vacía justo antes de la decimal (fat-finger típico
+// al tipear rápido). No debería romper ni devolver un numero plausible pero mal.
+test("parseMonto: una coma de miles vacia pegada a la coma decimal no rompe nada", () => {
+  assert.equal(parseMonto("1,,50"), 1.5);
+});
+
 test("parseMonto: texto no numerico da 0", () => {
   assert.equal(parseMonto("abc"), 0);
 });
