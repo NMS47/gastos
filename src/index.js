@@ -52,12 +52,14 @@ async function api(request, env) {
   try {
     if (res === "state" && m === "GET") {
       await generarDelMes(env);
-      const [cuentas, movs, servicios] = await env.DB.batch([
+      const [cuentas, movs, servicios, ingresos] = await env.DB.batch([
         env.DB.prepare("SELECT * FROM cuenta ORDER BY def DESC, nombre"),
         env.DB.prepare("SELECT * FROM mov ORDER BY fecha DESC, creado DESC LIMIT 2000"),
-        env.DB.prepare("SELECT * FROM servicio ORDER BY activo DESC, modo, nombre")
+        env.DB.prepare("SELECT * FROM servicio ORDER BY activo DESC, modo, nombre"),
+        env.DB.prepare("SELECT * FROM ingreso ORDER BY activo DESC, monto DESC")
       ]);
-      return json({ cuentas: cuentas.results, movs: movs.results, servicios: servicios.results });
+      return json({ cuentas: cuentas.results, movs: movs.results,
+                    servicios: servicios.results, ingresos: ingresos.results });
     }
 
     if (res === "movs" && !rid && m === "POST") {
@@ -281,6 +283,56 @@ async function api(request, env) {
       const usado = await env.DB.prepare("SELECT 1 FROM mov WHERE servicio_id = ? LIMIT 1").bind(rid).first();
       if (usado) return json({ error: "Ese servicio ya generó gastos. Dale de baja en vez de borrarlo." }, 409);
       await env.DB.prepare("DELETE FROM servicio WHERE id = ?").bind(rid).run();
+      return json({ ok: true });
+    }
+
+    if (res === "ingresos" && !rid && m === "POST") {
+      const b = await request.json();
+      const nombre = (b.nombre || "").trim().slice(0, 40);
+      if (!nombre) return json({ error: "Poné un nombre" }, 400);
+      const monto = Number(b.monto);
+      if (!(monto > 0)) return json({ error: "Monto inválido" }, 400);
+      const desde = /^\d{4}-\d{2}$/.test(b.desde || "") ? b.desde : mesActualAR();
+      const hasta = /^\d{4}-\d{2}$/.test(b.hasta || "") ? b.hasta : null;
+      if (hasta && hasta < desde)
+        return json({ error: "El hasta no puede ser anterior al desde" }, 400);
+
+      const row = {
+        id: id(), nombre, monto,
+        dia: b.dia == null ? null : Math.min(Math.max(parseInt(b.dia) || 1, 1), 31),
+        desde, hasta, activo: 1, creado: new Date().toISOString()
+      };
+      await env.DB.prepare(
+        "INSERT INTO ingreso (id,nombre,monto,dia,desde,hasta,activo,creado) VALUES (?,?,?,?,?,?,?,?)"
+      ).bind(row.id, row.nombre, row.monto, row.dia, row.desde, row.hasta, row.activo, row.creado).run();
+      return json(row, 201);
+    }
+
+    if (res === "ingresos" && rid && m === "PATCH") {
+      const b = await request.json();
+      const actual = await env.DB.prepare("SELECT * FROM ingreso WHERE id = ?").bind(rid).first();
+      if (!actual) return json({ error: "Ingreso inexistente" }, 404);
+
+      const nombre = b.nombre === undefined ? actual.nombre : (b.nombre || "").trim().slice(0, 40);
+      if (!nombre) return json({ error: "Poné un nombre" }, 400);
+      const monto = b.monto === undefined ? actual.monto : Number(b.monto);
+      if (!(monto > 0)) return json({ error: "Monto inválido" }, 400);
+      const dia = b.dia === undefined ? actual.dia
+        : (b.dia == null ? null : Math.min(Math.max(parseInt(b.dia) || 1, 1), 31));
+      const activo = b.activo === undefined ? actual.activo : (b.activo ? 1 : 0);
+      let hasta = actual.hasta;
+      if (b.hasta !== undefined) hasta = /^\d{4}-\d{2}$/.test(b.hasta || "") ? b.hasta : null;
+      if (hasta && hasta < actual.desde)
+        return json({ error: "El hasta no puede ser anterior al desde" }, 400);
+
+      await env.DB.prepare(
+        "UPDATE ingreso SET nombre=?, monto=?, dia=?, hasta=?, activo=? WHERE id=?"
+      ).bind(nombre, monto, dia, hasta, activo, rid).run();
+      return json({ ...actual, nombre, monto, dia, hasta, activo });
+    }
+
+    if (res === "ingresos" && rid && m === "DELETE") {
+      await env.DB.prepare("DELETE FROM ingreso WHERE id = ?").bind(rid).run();
       return json({ ok: true });
     }
 
