@@ -261,6 +261,11 @@ test("cascada: la bandeja incluye los sin categoria pagados con tarjeta", () => 
   const c = cascada(d, "2026-10");
   assert.equal(c.sinCategoria.length, 1);
   assert.equal(c.totalSinTope, 0);             // la caja ya la cuenta el resumen
+  // Sin esto el test no prueba nada sobre la plata: totalSinTope en 0 también daría si
+  // los 12.000 se hubieran perdido. El resumen todavía no llegó (cae en noviembre), así
+  // que en octubre no tienen que faltar ni duplicarse: queda tiene que ser el ingreso
+  // entero, ni un peso menos ni un peso de más.
+  assert.equal(c.queda, 3350000);
 });
 
 test("cascada: un gasto personal no toca ningun total familiar", () => {
