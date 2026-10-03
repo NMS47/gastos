@@ -92,6 +92,7 @@
   .sect{margin:22px 0 8px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
   .empty{color:var(--muted); font-size:14px; padding:8px 0; line-height:1.5}
   .del{background:none; border:none; color:var(--danger); font-size:13px; padding:4px}
+  .mini{background:none; border:none; color:var(--danger); font-size:15px; padding:4px 8px; line-height:1}
   .star{background:none; border:none; font-size:17px; padding:4px; line-height:1}
   .inline{display:flex; gap:8px}
   .inline>*{flex:1}
@@ -165,6 +166,39 @@
     <div class="card" id="pendientes" hidden></div>
     <div class="sect">Ya comprometido en cuotas</div>
     <div class="card" id="futuro"></div>
+  </section>
+
+  <section id="v-plan" hidden>
+    <h1>Plan del mes</h1>
+    <div class="sect">Ingresos</div>
+    <div class="card" id="ingresos-list"></div>
+    <div class="card">
+      <div class="field">
+        <label for="i-nom">Nombre</label>
+        <input id="i-nom" placeholder="Sueldo, alquiler del depto…" autocomplete="off">
+      </div>
+      <div class="inline field">
+        <div>
+          <label for="i-monto">Monto</label>
+          <input id="i-monto" inputmode="decimal" placeholder="0" autocomplete="off">
+        </div>
+        <div>
+          <label for="i-dia">Día del mes</label>
+          <input id="i-dia" inputmode="numeric" value="5">
+        </div>
+      </div>
+      <div class="field">
+        <label for="i-hasta">Solo este mes</label>
+        <select id="i-hasta">
+          <option value="">No, todos los meses</option>
+          <option value="unico">Sí, entra una sola vez</option>
+        </select>
+      </div>
+      <button class="primary" id="i-save">Agregar ingreso</button>
+    </div>
+    <div class="sect">Topes por categoría</div>
+    <p class="hint">Una categoría sin tope no se reserva: se resta lo que realmente se paga.</p>
+    <div class="card" id="topes-list"></div>
   </section>
 
   <section id="v-serv" hidden>
@@ -260,20 +294,21 @@
 <nav role="tablist">
   <button data-v="load" aria-selected="true">Cargar</button>
   <button data-v="month" aria-selected="false">Mes</button>
+  <button data-v="plan" aria-selected="false">Plan</button>
   <button data-v="serv" aria-selected="false">Servicios<span class="dot" id="navdot" hidden></span></button>
   <button data-v="acc" aria-selected="false">Medios</button>
 </nav>
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { impactos, ym } from "./calculo.mjs";
+import { impactos, ym, vigenteEn } from "./calculo.mjs";
 const CATS = ["Supermercado","Comida afuera","Auto","Transporte","Servicios",
   "Alquiler / Expensas","Hogar","Salud","Deudas","Educación","Ropa","Viajes",
   "Ocio / Paseo","Suscripciones","Regalos","Impuestos","Mascotas","Otros"];
 const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto",
                "septiembre","octubre","noviembre","diciembre"];
 
-let cuentas = [], movs = [], servicios = [], cursor = new Date();
+let cuentas = [], movs = [], servicios = [], ingresos = [], topes = [], cursor = new Date();
 const $ = id => document.getElementById(id);
 const fmt = n => "$" + Math.round(n).toLocaleString("es-AR");
 const esc = s => String(s).replace(/[<>&]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
@@ -415,6 +450,32 @@ function renderMonth(){
       `<div class="row"><div class="name"><b>Total a vencer</b></div>
         <div class="val mono">${fmt(totalPend)}</div></div>`;
   }
+}
+
+function renderPlan(){
+  const vig = ingresos.filter(i => vigenteEn(i, ym(cursor)));
+  const tot = vig.reduce((a,i) => a + i.monto, 0);
+  $("ingresos-list").innerHTML = ingresos.length
+    ? ingresos.map(i => {
+        const unico = i.hasta && i.hasta === i.desde;
+        const corre = vigenteEn(i, ym(cursor));
+        return `<div class="row" style="${corre ? "" : "opacity:.5"}">
+          <div class="name">${esc(i.nombre)}
+            <span class="sub">${i.dia ? "día " + i.dia : "sin día"}${unico ? " · solo " + i.desde : ""}${i.activo ? "" : " · de baja"}</span></div>
+          <div class="val mono">${fmt(i.monto)}</div>
+          <button data-rmi="${i.id}" class="mini">✕</button></div>`;
+      }).join("") + `<div class="row"><div class="name"><b>Total del mes</b></div>
+         <div class="val mono"><b>${fmt(tot)}</b></div></div>`
+    : `<div class="empty">Sin ingresos cargados. La cascada no puede calcular nada todavía.</div>`;
+
+  const porCat = Object.fromEntries(topes.map(t => [t.cat, t.monto]));
+  // Las categorias con tope primero, despues las que podrian tenerlo. Un tope de una
+  // categoria que ya no esta en CATS igual se lista, para poder sacarlo.
+  const orden = [...new Set([...topes.map(t => t.cat), ...CATS])];
+  $("topes-list").innerHTML = orden.map(c => `<div class="row">
+    <div class="name">${esc(c)}${CATS.includes(c) ? "" : ` <span class="tag">vieja</span>`}</div>
+    <input class="tope-in mono" data-cat="${esc(c)}" inputmode="decimal"
+      value="${porCat[c] ?? ""}" placeholder="sin tope"></div>`).join("");
 }
 
 function renderServicios(){
@@ -614,11 +675,12 @@ async function boot(){
   $("fecha").value = hoyISO();
   try {
     const s = await api("state");
-    cuentas = s.cuentas; movs = s.movs; servicios = s.servicios || []; showErr("");
+    cuentas = s.cuentas; movs = s.movs; servicios = s.servicios || [];
+    ingresos = s.ingresos || []; topes = s.topes || []; showErr("");
   } catch(e){
     showErr("No se pudieron cargar los datos: " + e.message);
   }
-  fillSelects(); renderLoad(); renderUltimos(); renderMonth(); renderServicios(); renderAcc();
+  fillSelects(); renderLoad(); renderUltimos(); renderMonth(); renderPlan(); renderServicios(); renderAcc();
 }
 
 ["monto","cuenta","cuotas","fecha"].forEach(id => {
@@ -728,6 +790,7 @@ $("addserv").addEventListener("click", async () => {
     try {
       const s = await api("state");
       cuentas = s.cuentas; movs = s.movs; servicios = s.servicios || [];
+      ingresos = s.ingresos || []; topes = s.topes || [];
       fillSelects();
     } catch(_){ servicios.push(nuevo); }
     showErr(""); renderServicios(); renderUltimos(); renderMonth(); toast(nombre + " agregado");
@@ -777,13 +840,56 @@ async function confirmarPago(mid, box){
   if(ok)  return confirmarPago(ok, e.target.closest(".payrow"));
 }));
 
+$("i-save").addEventListener("click", async () => {
+  const monto = parseMonto($("i-monto").value);
+  const nombre = $("i-nom").value.trim();
+  if(!monto || !nombre) return;
+  const mes = ym(cursor);
+  try {
+    const row = await api("ingresos", "POST", { nombre, monto, dia: +$("i-dia").value || null,
+      desde: mes, hasta: $("i-hasta").value === "unico" ? mes : null });
+    ingresos.push(row);
+    $("i-nom").value = ""; $("i-monto").value = "";
+    toast("Ingreso agregado"); renderPlan(); renderMonth();
+  } catch(e){ showErr("No se guardó: " + e.message); }
+});
+
+$("ingresos-list").addEventListener("click", async e => {
+  const iid = e.target.dataset.rmi; if(!iid) return;
+  try {
+    await api("ingresos/" + iid, "DELETE");
+    ingresos = ingresos.filter(i => i.id !== iid);
+    toast("Ingreso borrado"); renderPlan(); renderMonth();
+  } catch(err){ showErr("No se borró: " + err.message); }
+});
+
+// `change` y no `input`: guarda al salir del campo, no en cada tecla.
+$("topes-list").addEventListener("change", async e => {
+  const cat = e.target.dataset.cat; if(!cat) return;
+  const v = e.target.value.trim();
+  try {
+    if(!v){
+      await api("topes/" + encodeURIComponent(cat), "DELETE");
+      topes = topes.filter(t => t.cat !== cat);
+      toast("Tope sacado");
+    } else {
+      const row = await api("topes/" + encodeURIComponent(cat), "PUT", { monto: parseMonto(v) });
+      const i = topes.findIndex(t => t.cat === cat);
+      if(i >= 0) topes[i] = row; else topes.push(row);
+      toast("Tope guardado");
+    }
+    renderPlan(); renderMonth();
+  } catch(err){ showErr("No se guardó: " + err.message); }
+});
+
 $("prev").addEventListener("click", () => { cursor.setDate(1); cursor.setMonth(cursor.getMonth()-1); renderMonth(); });
 $("next").addEventListener("click", () => { cursor.setDate(1); cursor.setMonth(cursor.getMonth()+1); renderMonth(); });
 
 document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => {
   document.querySelectorAll("nav button").forEach(x => x.setAttribute("aria-selected", x === b));
-  ["load","month","serv","acc"].forEach(v => $("v-"+v).hidden = v !== b.dataset.v);
+  ["load","month","plan","serv","acc"].forEach(v => $("v-"+v).hidden = v !== b.dataset.v);
   if(b.dataset.v === "month") renderMonth();
+  if(b.dataset.v === "plan") renderPlan();
   if(b.dataset.v === "serv") renderServicios();
   if(b.dataset.v === "acc") renderAcc();
 }));

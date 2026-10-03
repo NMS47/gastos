@@ -24,6 +24,17 @@ import path from "node:path";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const indexPath = path.join(__dirname, "..", "public", "index.html");
 
+// `ingresos.desde/hasta` y `cursor` en el frontend son del mes real en que corre el test
+// (cursor = new Date()), así que para que vigenteEn() los encuentre vigentes de verdad
+// (tarea 9, rama de highlight de renderPlan) estos valores tienen que ser relativos a
+// hoy, no un "2026-09" fijo que el año que viene ya sería pasado o futuro sin que nadie
+// haya tocado este archivo.
+const pad2 = n => String(n).padStart(2, "0");
+const hoy = new Date();
+const mesActual = `${hoy.getFullYear()}-${pad2(hoy.getMonth() + 1)}`;
+const haceUnAnio = new Date(hoy.getFullYear() - 1, hoy.getMonth(), 1);
+const mesPasado = `${haceUnAnio.getFullYear()}-${pad2(haceUnAnio.getMonth() + 1)}`;
+
 // Payload de /api/state, con los mismos nombres de columna que devuelve `SELECT *` en
 // src/index.js (ver schema.sql y migracion-presupuesto.sql: mov tiene `ambito`, servicio
 // tiene `hasta`). Un solo objeto acá arriba para que sea fácil sumarle `ingresos`/`topes`
@@ -63,6 +74,24 @@ const ESTADO_MOCK = {
       modo: "manual", activo: 1, desde: "2026-01", creado: "2026-01-01T00:00:00.000Z", hasta: null },
     { id: "srv2", nombre: "Gimnasio", monto: 8000, dia: 5, cuenta_id: "ef", cat: "Salud",
       modo: "manual", activo: 1, desde: "2026-01", creado: "2026-01-01T00:00:00.000Z", hasta: null },
+  ],
+  // Tarea 9 (renderPlan): tres ingresos para que corran las tres ramas de la lista —
+  // recurrente y vigente (se resalta), único de este mes (etiqueta "solo <mes>") y uno
+  // dado de baja (etiqueta "de baja", y no vigente por más que su `desde` ya haya
+  // empezado). Y dos topes: uno de una categoría real (Supermercado) y uno de una
+  // categoría que ya no está en CATS, para ejercitar la etiqueta "vieja" que permite
+  // sacarlo.
+  ingresos: [
+    { id: "ing1", nombre: "Sueldo", monto: 1500000, dia: 5, desde: mesPasado, hasta: null,
+      activo: 1, creado: "2026-01-01T00:00:00.000Z" },
+    { id: "ing2", nombre: "Aguinaldo", monto: 700000, dia: 18, desde: mesActual, hasta: mesActual,
+      activo: 1, creado: "2026-01-01T00:00:00.000Z" },
+    { id: "ing3", nombre: "Changa vieja", monto: 50000, dia: 1, desde: mesPasado, hasta: null,
+      activo: 0, creado: "2026-01-01T00:00:00.000Z" },
+  ],
+  topes: [
+    { cat: "Supermercado", monto: 600000 },
+    { cat: "Delivery", monto: 30000 },
   ],
 };
 
