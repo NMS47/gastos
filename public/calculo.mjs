@@ -132,8 +132,15 @@ export function cascada({ movs, cuentas, ingresos, servicios, topes }, mes, mesC
     if (!c || !familiar(m) || !mesDe(m.fecha)) continue;
     for (const i of impactos(m, c)) if (i.mes === mes) tarjeta += i.monto;
   }
-  for (const c of credito.values())
-    if (c.base_pago && (!c.pagado_hasta || c.pagado_hasta < mes)) tarjeta += c.base_pago;
+  // base_pago entra entero en el PRIMER resumen que todavía no está pagado, no en todos
+  // los que vengan después (ver la spec). Ese primer mes es el que sigue a pagado_hasta;
+  // sin pagado_hasta todavía (nunca se marcó un pago) es mesCorriente, porque la app no
+  // tiene forma de saber en qué mes empezó a existir esa deuda.
+  for (const c of credito.values()) {
+    if (!c.base_pago) continue;
+    const primerNoPagado = c.pagado_hasta ? ymMas(c.pagado_hasta, 1) : mesCorriente;
+    if (primerNoPagado === mes) tarjeta += c.base_pago;
+  }
 
   const porCat = consumos(todos, mes);
   const conTope = topes.map(t => ({ cat: t.cat, tope: t.monto, consumido: porCat[t.cat] || 0 }));

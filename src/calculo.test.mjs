@@ -196,6 +196,15 @@ test("cascada: la tarjeta suma base_pago si el resumen del mes no esta pagado", 
   assert.equal(cascada(d, "2026-10").tarjeta, 0);
 });
 
+test("cascada: base_pago entra solo en el primer resumen no pagado, no en los siguientes", () => {
+  const d = base();
+  d.cuentas[0].base_pago = 200000;
+  d.cuentas[0].pagado_hasta = "2026-09";
+  assert.equal(cascada(d, "2026-10").tarjeta, 200000);   // el primero no pagado
+  assert.equal(cascada(d, "2026-11").tarjeta, 0);         // no en el que sigue
+  assert.equal(cascada(d, "2026-12").tarjeta, 0);         // ni en los de mas adelante
+});
+
 // Review de rama completa: un servicio de tarjeta de credito dejaba de aparecer en la
 // cascada a partir de mesCorriente + 2, porque movsDelMes solo proyectaba el mes que se
 // estaba mirando y nunca el mes intermedio cuya compra cae en el resumen de ese mes.
