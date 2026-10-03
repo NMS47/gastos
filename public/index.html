@@ -377,8 +377,8 @@ function fillSelects(){
     $("s-cat").innerHTML = `<option value="">—</option>` + CATS.map(c=>`<option>${c}</option>`).join("");
 }
 
-// Cuanto queda del tope de una categoria en el mes de la fecha que se esta cargando.
-// null si esa categoria no tiene tope.
+// Cuánto queda del tope de una categoría en el mes de la fecha que se está cargando.
+// null si esa categoría no tiene tope.
 function restante(cat, mes){
   const t = topes.find(x => x.cat === cat);
   if(!t) return null;
@@ -547,8 +547,8 @@ function renderPlan(){
     : `<div class="empty">Sin ingresos cargados. La cascada no puede calcular nada todavía.</div>`;
 
   const porCat = Object.fromEntries(topes.map(t => [t.cat, t.monto]));
-  // Las categorias con tope primero, despues las que podrian tenerlo. Un tope de una
-  // categoria que ya no esta en CATS igual se lista, para poder sacarlo.
+  // Las categorías con tope primero, después las que podrían tenerlo. Un tope de una
+  // categoría que ya no está en CATS igual se lista, para poder sacarlo.
   const orden = [...new Set([...topes.map(t => t.cat), ...CATS])];
   $("topes-list").innerHTML = orden.map(c => `<div class="row">
     <div class="name">${esc(c)}${CATS.includes(c) ? "" : ` <span class="tag">vieja</span>`}</div>
@@ -966,10 +966,10 @@ $("topes-list").addEventListener("change", async e => {
   } catch(err){ showErr("No se guardó: " + err.message); }
 });
 
-// Tocar una barra edita ese tope ahi mismo: es donde uno se da cuenta de que esta mal.
-// El string del prompt se mira vacio/no-vacio ANTES de parsear: parseMonto devuelve 0
+// Tocar una barra edita ese tope ahí mismo: es donde uno se da cuenta de que está mal.
+// El string del prompt se mira vacío/no-vacío ANTES de parsear: parseMonto devuelve 0
 // tanto para "" como para "0", y un tope en 0 es real (ver anchoBarra) — si mirara el
-// monto ya parseado, poner la categoria en 0 borraria el tope en vez de fijarlo.
+// monto ya parseado, poner la categoría en 0 borraría el tope en vez de fijarlo.
 $("topesmes").addEventListener("click", async e => {
   const box = e.target.closest("[data-tope]"); if(!box) return;
   const cat = box.dataset.tope;
@@ -990,7 +990,7 @@ $("topesmes").addEventListener("click", async e => {
   } catch(err){ showErr("No se guardó: " + err.message); }
 });
 
-// Asignar categoria desde la bandeja: un PATCH y sincronizar el array local, sin
+// Asignar categoría desde la bandeja: un PATCH y sincronizar el array local, sin
 // volver a pedir /api/state.
 $("bandeja").addEventListener("change", async e => {
   const mid = e.target.dataset.asignar; if(!mid) return;

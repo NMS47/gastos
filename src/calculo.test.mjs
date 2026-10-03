@@ -183,7 +183,7 @@ test("cascada: un servicio pagado con tarjeta no se resta dos veces", () => {
   d.movs = [{ fecha: "2026-10-05", monto: 15000, cuotas: 1, cat: "Suscripciones",
               cuenta_id: "v", servicio_id: "1", estado: "pagado" }];
   const enOctubre = cascada(d, "2026-10");
-  assert.equal(enOctubre.totalSinTope, 0);     // no esta como linea de caja
+  assert.equal(enOctubre.totalSinTope, 0);     // no está como línea de caja
   assert.equal(enOctubre.tarjeta, 0);          // el resumen cae en noviembre
   assert.equal(cascada(d, "2026-11").tarjeta, 15000);
 });
@@ -290,7 +290,7 @@ test("cascada: un mes futuro resta los servicios aunque todavia no tengan fila",
   assert.equal(nov.queda, 3260000);
 });
 
-// Review Focus 2: fila huerfana de una categoria que ya no esta en CATS.
+// Review Focus 2: fila huérfana de una categoría que ya no está en CATS.
 test("cascada: un tope de una categoria que ya no existe se sigue restando y se lista", () => {
   const d = base();
   d.topes = [{ cat: "Nafta", monto: 250000 }];

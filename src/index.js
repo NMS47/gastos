@@ -17,8 +17,8 @@ const id = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6
 // por sí sola impide filas duplicadas, sin depender de que exista el índice único
 // parcial idx_mov_serv_mes. Ese índice queda como respaldo redundante — no lo saques
 // pensando que ya no hace falta, es la segunda barrera si algún día esto se toca.
-// `hasta` corta la generacion: un compromiso de 7 cuotas deja de generar en el mes 8
-// sin que haya que darlo de baja a mano. Esta condicion duplica a proposito la logica
+// `hasta` corta la generación: un compromiso de 7 cuotas deja de generar en el mes 8
+// sin que haya que darlo de baja a mano. Esta condición duplica a propósito la lógica
 // de vigenteEn() en public/calculo.mjs — una corre en SQL y la otra en el navegador.
 // Si se cambia una, cambiar la otra.
 async function generarDelMes(env) {
@@ -357,7 +357,7 @@ async function api(request, env) {
       return json({ ok: true });
     }
 
-    // PUT y no POST: el tope esta identificado por la categoria, asi que poner un
+    // PUT y no POST: el tope está identificado por la categoría, así que poner un
     // tope es idempotente. Mandarlo dos veces no crea dos filas.
     if (res === "topes" && rid && m === "PUT") {
       const b = await request.json();
@@ -373,7 +373,7 @@ async function api(request, env) {
 
     if (res === "topes" && rid && m === "DELETE") {
       // Mismo .slice(0, 40) que el PUT: hay que borrar la clave que de verdad se
-      // guardo, no la que llego cruda en la URL.
+      // guardó, no la que llegó cruda en la URL.
       const cat = decodeURIComponent(rid).slice(0, 40);
       await env.DB.prepare("DELETE FROM tope WHERE cat = ?").bind(cat).run();
       return json({ ok: true });
