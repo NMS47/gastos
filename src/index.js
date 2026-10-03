@@ -52,14 +52,16 @@ async function api(request, env) {
   try {
     if (res === "state" && m === "GET") {
       await generarDelMes(env);
-      const [cuentas, movs, servicios, ingresos] = await env.DB.batch([
+      const [cuentas, movs, servicios, ingresos, topes] = await env.DB.batch([
         env.DB.prepare("SELECT * FROM cuenta ORDER BY def DESC, nombre"),
         env.DB.prepare("SELECT * FROM mov ORDER BY fecha DESC, creado DESC LIMIT 2000"),
         env.DB.prepare("SELECT * FROM servicio ORDER BY activo DESC, modo, nombre"),
-        env.DB.prepare("SELECT * FROM ingreso ORDER BY activo DESC, monto DESC")
+        env.DB.prepare("SELECT * FROM ingreso ORDER BY activo DESC, monto DESC"),
+        env.DB.prepare("SELECT * FROM tope ORDER BY monto DESC")
       ]);
       return json({ cuentas: cuentas.results, movs: movs.results,
-                    servicios: servicios.results, ingresos: ingresos.results });
+                    servicios: servicios.results, ingresos: ingresos.results,
+                    topes: topes.results });
     }
 
     if (res === "movs" && !rid && m === "POST") {
@@ -333,6 +335,25 @@ async function api(request, env) {
 
     if (res === "ingresos" && rid && m === "DELETE") {
       await env.DB.prepare("DELETE FROM ingreso WHERE id = ?").bind(rid).run();
+      return json({ ok: true });
+    }
+
+    // PUT y no POST: el tope esta identificado por la categoria, asi que poner un
+    // tope es idempotente. Mandarlo dos veces no crea dos filas.
+    if (res === "topes" && rid && m === "PUT") {
+      const b = await request.json();
+      const cat = decodeURIComponent(rid).slice(0, 40);
+      if (!cat) return json({ error: "Falta la categoría" }, 400);
+      const monto = Number(b.monto);
+      if (!(monto >= 0)) return json({ error: "Monto inválido" }, 400);
+      await env.DB.prepare(
+        "INSERT INTO tope (cat,monto) VALUES (?,?) ON CONFLICT(cat) DO UPDATE SET monto=excluded.monto"
+      ).bind(cat, monto).run();
+      return json({ cat, monto });
+    }
+
+    if (res === "topes" && rid && m === "DELETE") {
+      await env.DB.prepare("DELETE FROM tope WHERE cat = ?").bind(decodeURIComponent(rid)).run();
       return json({ ok: true });
     }
 
