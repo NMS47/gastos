@@ -17,11 +17,15 @@ const id = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6
 // por sí sola impide filas duplicadas, sin depender de que exista el índice único
 // parcial idx_mov_serv_mes. Ese índice queda como respaldo redundante — no lo saques
 // pensando que ya no hace falta, es la segunda barrera si algún día esto se toca.
+// `hasta` corta la generacion: un compromiso de 7 cuotas deja de generar en el mes 8
+// sin que haya que darlo de baja a mano. Esta condicion duplica a proposito la logica
+// de vigenteEn() en public/calculo.mjs — una corre en SQL y la otra en el navegador.
+// Si se cambia una, cambiar la otra.
 async function generarDelMes(env) {
   const mes = mesActualAR();
   const { results } = await env.DB.prepare(
-    "SELECT * FROM servicio WHERE activo = 1 AND desde <= ?"
-  ).bind(mes).all();
+    "SELECT * FROM servicio WHERE activo = 1 AND desde <= ? AND (hasta IS NULL OR hasta >= ?)"
+  ).bind(mes, mes).all();
   if (!results.length) return;
 
   const creado = new Date().toISOString();
@@ -214,6 +218,10 @@ async function api(request, env) {
       const cuenta = await env.DB.prepare("SELECT id FROM cuenta WHERE id = ?").bind(b.cuenta_id).first();
       if (!cuenta) return json({ error: "Medio de pago inexistente" }, 400);
 
+      const desde = mesActualAR();
+      const hasta = /^\d{4}-\d{2}$/.test(b.hasta || "") ? b.hasta : null;
+      if (hasta && hasta < desde) return json({ error: "El hasta no puede ser anterior al desde" }, 400);
+
       const row = {
         id: "s" + id(),
         nombre, monto, dia,
@@ -221,12 +229,13 @@ async function api(request, env) {
         cat: b.cat || null,
         modo,
         activo: 1,
-        desde: mesActualAR(),
+        desde,
+        hasta,
         creado: new Date().toISOString()
       };
       await env.DB.prepare(
-        "INSERT INTO servicio (id,nombre,monto,dia,cuenta_id,cat,modo,activo,desde,creado) VALUES (?,?,?,?,?,?,?,1,?,?)"
-      ).bind(row.id, row.nombre, row.monto, row.dia, row.cuenta_id, row.cat, row.modo, row.desde, row.creado).run();
+        "INSERT INTO servicio (id,nombre,monto,dia,cuenta_id,cat,modo,activo,desde,hasta,creado) VALUES (?,?,?,?,?,?,?,1,?,?,?)"
+      ).bind(row.id, row.nombre, row.monto, row.dia, row.cuenta_id, row.cat, row.modo, row.desde, row.hasta, row.creado).run();
       // Genera ya el gasto del mes corriente para este servicio, si corresponde:
       // si no, un alta a fin de mes se queda sin boleta hasta el próximo GET /api/state.
       // INSERT OR IGNORE hace que esto sea gratis para los servicios que ya la tienen.
@@ -256,11 +265,16 @@ async function api(request, env) {
         if (!cuenta) return json({ error: "Medio de pago inexistente" }, 400);
         cuenta_id = b.cuenta_id;
       }
+      let hasta = actual.hasta;
+      if (b.hasta !== undefined)
+        hasta = /^\d{4}-\d{2}$/.test(b.hasta || "") ? b.hasta : null;
+      if (hasta && hasta < actual.desde)
+        return json({ error: "El hasta no puede ser anterior al desde" }, 400);
 
       await env.DB.prepare(
-        "UPDATE servicio SET nombre=?, monto=?, dia=?, cuenta_id=?, cat=?, modo=?, activo=? WHERE id=?"
-      ).bind(nombre, monto, dia, cuenta_id, cat, modo, activo, rid).run();
-      return json({ ...actual, nombre, monto, dia, cuenta_id, cat, modo, activo });
+        "UPDATE servicio SET nombre=?, monto=?, dia=?, cuenta_id=?, cat=?, modo=?, activo=?, hasta=? WHERE id=?"
+      ).bind(nombre, monto, dia, cuenta_id, cat, modo, activo, hasta, rid).run();
+      return json({ ...actual, nombre, monto, dia, cuenta_id, cat, modo, activo, hasta });
     }
 
     if (res === "servicios" && rid && m === "DELETE") {
