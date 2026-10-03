@@ -239,11 +239,14 @@ async function evaluarScriptFrontend(estadoMock, { precargarForm } = {}) {
     rmSync(tempPath, { force: true });
   }
 
-  return erroresNoControlados;
+  // Se devuelve también getElementById: permite leer lo que renderMonth() escribió de
+  // verdad en innerHTML/textContent (fakeElement() lo guarda tal cual, ver más arriba) y
+  // afirmar sobre el HTML generado, no solo sobre que el script no explotó.
+  return { errores: erroresNoControlados, getElementById };
 }
 
 test('el <script type="module"> de index.html evalúa sin explotar (modo estricto, con datos reales)', async () => {
-  const errores = await evaluarScriptFrontend(ESTADO_MOCK, {
+  const { errores, getElementById } = await evaluarScriptFrontend(ESTADO_MOCK, {
     // Nadie tipeó nada en el form de "Cargar": sin esto, $("monto").value sigue en ""
     // y renderLoad() nunca llama a impactos() aunque la cuenta preseleccionada sea de
     // crédito. Simula que ya hay un monto y una cantidad de cuotas cargados.
@@ -253,4 +256,20 @@ test('el <script type="module"> de index.html evalúa sin explotar (modo estrict
     },
   });
   assert.deepEqual(errores, []);
+
+  // Pin de la regresión (ver CLAUDE.md del fix): un gasto personal (m3 en ESTADO_MOCK)
+  // tiene que seguir apareciendo en #mlist, con su tag "personal" y su botón de borrar
+  // — si esFamiliar() volviera a filtrar ese array, estos dos asserts quedarían en rojo
+  // en vez de que el regresivo pase en silencio como la vez anterior.
+  const mlist = getElementById("mlist").innerHTML;
+  assert.match(mlist, /<span class="tag personal">personal<\/span>/,
+    "el gasto personal (m3) tiene que listarse en Movimientos con su tag");
+  assert.match(mlist, /data-del="m3"/,
+    "el gasto personal (m3) tiene que tener su propio botón de borrar en Movimientos");
+
+  // La otra mitad del split: el mismo gasto personal no tiene que inflar Gastado. $7.000
+  // es fmt(7000), el monto de m3; si esFamiliar() dejara de filtrar filasFam, este monto
+  // aparecería sumado al total de Gastado.
+  assert.doesNotMatch(getElementById("mgastado").textContent, /\$7\.000/,
+    "el gasto personal (m3) no tiene que sumar a Gastado");
 });
