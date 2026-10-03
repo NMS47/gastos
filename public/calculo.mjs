@@ -154,3 +154,20 @@ export function anchoBarra(consumido, tope) {
   if (!tope) return consumido > 0 ? 100 : 0;
   return Math.min(100, Math.round(consumido / tope * 100));
 }
+
+// El monto que escribió una persona, nunca con decimales en esta app (CLAUDE.md:
+// "Montos con toLocaleString('es-AR'), sin decimales", y fmt() redondea todo lo que
+// muestra). Por eso un punto o una coma SIEMPRE es separador de miles y se descarta:
+// no hay forma de pedir un decimal real desde este campo, así que no hace falta
+// distinguir "1.700.000" (un millón setecientos mil) de un decimal inexistente.
+// El único caso que cambia de comportamiento es un decimal explícito como "600,50":
+// antes daba 600.5, ahora da 60050. Es la contracara intencional del arreglo: se pierde
+// algo que la convención dice que no existe, a cambio de arreglar separadores de miles
+// reales ("600.000", "1.700.000") que antes truncaban el monto. No "arreglar" esto de
+// vuelta a tratar el punto/coma como decimal: eso es el bug original.
+export function parseMonto(v) {
+  if (!v) return 0;
+  const s = String(v).trim().replace(/\s/g, "").replace(/[.,]/g, "");
+  const n = parseFloat(s);
+  return isFinite(n) && n > 0 ? n : 0;
+}

@@ -315,7 +315,7 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { impactos, ym, vigenteEn, cascada, anchoBarra, consumos } from "./calculo.mjs";
+import { impactos, ym, vigenteEn, cascada, anchoBarra, consumos, parseMonto } from "./calculo.mjs";
 const CATS = ["Supermercado","Comida afuera","Auto","Transporte","Servicios",
   "Alquiler / Expensas","Hogar","Salud","Deudas","Educación","Ropa","Viajes",
   "Ocio / Paseo","Suscripciones","Regalos","Impuestos","Mascotas","Otros"];
@@ -360,15 +360,6 @@ async function api(path, method = "GET", body, reintento){
 
 // Resuelve la cuenta y delega en el módulo. Los llamadores no cambian de forma.
 const imp = m => impactos(m, cuentas.find(x => x.id === m.cuenta_id));
-
-function parseMonto(v){
-  if(!v) return 0;
-  let s = String(v).trim().replace(/\s/g,"");
-  if(s.includes(".") && s.includes(",")) s = s.replace(/\./g,"").replace(",",".");
-  else if(s.includes(",")) s = s.replace(",",".");
-  const n = parseFloat(s);
-  return isFinite(n) && n > 0 ? n : 0;
-}
 
 function fillSelects(){
   const sel = $("cuenta"), prev = sel.value;

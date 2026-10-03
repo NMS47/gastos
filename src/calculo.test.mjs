@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { impactos, ym, vigenteEn, consumos } from "../public/calculo.mjs";
-import { cascada as _cascada, movsDelMes, anchoBarra } from "../public/calculo.mjs";
+import { cascada as _cascada, movsDelMes, anchoBarra, parseMonto } from "../public/calculo.mjs";
 
 const visa = { id: "v", tipo: "credito", cierre: 20 };
 const efectivo = { id: "e", tipo: "debito" };
@@ -317,4 +317,49 @@ test("anchoBarra: un tope en 0 no da NaN", () => {
 test("anchoBarra: nunca pasa de 100", () => {
   assert.equal(anchoBarra(50, 100), 50);
   assert.equal(anchoBarra(500, 100), 100);
+});
+
+test("parseMonto: un numero sin separadores queda igual", () => {
+  assert.equal(parseMonto("600000"), 600000);
+});
+
+test("parseMonto: el punto es separador de miles, no decimal", () => {
+  assert.equal(parseMonto("600.000"), 600000);
+});
+
+test("parseMonto: la coma es separador de miles, no decimal", () => {
+  assert.equal(parseMonto("600,000"), 600000);
+});
+
+test("parseMonto: dos puntos de miles en el mismo monto", () => {
+  assert.equal(parseMonto("1.700.000"), 1700000);
+});
+
+test("parseMonto: punto y coma juntos se tratan igual, los dos de miles", () => {
+  assert.equal(parseMonto("600.000,50"), 60000050);
+});
+
+test("parseMonto: texto no numerico da 0", () => {
+  assert.equal(parseMonto("abc"), 0);
+});
+
+test("parseMonto: vacio da 0", () => {
+  assert.equal(parseMonto(""), 0);
+});
+
+test("parseMonto: cero da 0", () => {
+  assert.equal(parseMonto("0"), 0);
+});
+
+test("parseMonto: espacios alrededor no afectan el resultado", () => {
+  assert.equal(parseMonto("  600000  "), 600000);
+});
+
+test("parseMonto: un negativo da 0", () => {
+  assert.equal(parseMonto("-5"), 0);
+});
+
+test("parseMonto: null y undefined dan 0", () => {
+  assert.equal(parseMonto(null), 0);
+  assert.equal(parseMonto(undefined), 0);
 });
