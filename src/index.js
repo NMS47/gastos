@@ -372,7 +372,10 @@ async function api(request, env) {
     }
 
     if (res === "topes" && rid && m === "DELETE") {
-      await env.DB.prepare("DELETE FROM tope WHERE cat = ?").bind(decodeURIComponent(rid)).run();
+      // Mismo .slice(0, 40) que el PUT: hay que borrar la clave que de verdad se
+      // guardo, no la que llego cruda en la URL.
+      const cat = decodeURIComponent(rid).slice(0, 40);
+      await env.DB.prepare("DELETE FROM tope WHERE cat = ?").bind(cat).run();
       return json({ ok: true });
     }
 
