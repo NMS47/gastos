@@ -165,6 +165,8 @@
     </div>
     <div class="sect" id="topes-sect" hidden>Topes</div>
     <div class="card" id="topesmes" hidden></div>
+    <div class="sect" id="bandeja-sect" hidden>Sin categoría</div>
+    <div class="card" id="bandeja" hidden></div>
     <div class="sect">Movimientos</div>
     <div class="card" id="mlist"></div>
     <div class="sect" id="pend-sect" hidden>Vencen este mes</div>
@@ -442,6 +444,18 @@ function renderMonth(){
         <div class="bar"><i class="${paso ? "alerta" : ""}" style="width:${anchoBarra(t.consumido, t.tope)}%"></i></div>
         <div class="sub">${paso ? "te pasaste " + fmt(-resto) : "quedan " + fmt(resto)}</div></div>`;
     }).join("");
+
+  const sc = c.sinCategoria;
+  $("bandeja-sect").hidden = $("bandeja").hidden = !sc.length;
+  $("bandeja-sect").textContent = `Sin categoría · ${sc.length} ${sc.length === 1 ? "gasto" : "gastos"}`;
+  $("bandeja").innerHTML = sc.map(m => `<div class="row">
+    <div class="name">${esc(m.descripcion)}
+      <span class="sub">${esc(nombreCuenta(m.cuenta_id))} · ${m.fecha.slice(8)}/${m.fecha.slice(5,7)}</span></div>
+    <div class="val mono">${fmt(m.monto)}</div>
+    <select data-asignar="${m.id}">
+      <option value="">asignar…</option>
+      ${CATS.map(x => `<option>${x}</option>`).join("")}
+    </select></div>`).join("");
 
   const filas = [];
   movs.filter(sumaAlTotal).forEach(m => imp(m).forEach(i => { if(i.mes === key) filas.push({m, i}); }));
@@ -944,6 +958,19 @@ $("topesmes").addEventListener("click", async e => {
       if(i >= 0) topes[i] = row; else topes.push(row);
     }
     toast("Tope actualizado"); renderMonth(); renderPlan();
+  } catch(err){ showErr("No se guardó: " + err.message); }
+});
+
+// Asignar categoria desde la bandeja: un PATCH y sincronizar el array local, sin
+// volver a pedir /api/state.
+$("bandeja").addEventListener("change", async e => {
+  const mid = e.target.dataset.asignar; if(!mid) return;
+  const cat = e.target.value; if(!cat) return;
+  try {
+    const row = await api("movs/" + mid, "PATCH", { cat });
+    const i = movs.findIndex(m => m.id === mid);
+    if(i >= 0) movs[i] = row;
+    toast(`Va a ${cat}`); renderMonth();
   } catch(err){ showErr("No se guardó: " + err.message); }
 });
 
