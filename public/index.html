@@ -453,12 +453,18 @@ function renderMonth(){
     ? `Faltan ${fmt(-c.queda)} para cubrir el mes.`
     : `Cada uno: ${fmt(c.cadaUno)}.`;
 
+  // Ingresos siempre se muestra, aunque sea $0: sin ninguna fuente cargada todavia, el
+  // numero grande da negativo sin ninguna linea que lo explique. Las que se restan si
+  // se siguen ocultando en cero: una tarjeta sin uso o sin topes cargados no necesita
+  // decirlo.
   const lineas = [
     ["Ingresos", c.ingresos],
-    ["Tarjeta", -c.tarjeta],
-    ...c.sinTope.map(s => [s.cat || "Sin categoría", -s.monto]),
-    ["Topes", -c.totalTopes]
-  ].filter(([, v]) => v !== 0);
+    ...[
+      ["Tarjeta", -c.tarjeta],
+      ...c.sinTope.map(s => [s.cat || "Sin categoría", -s.monto]),
+      ["Topes", -c.totalTopes]
+    ].filter(([, v]) => v !== 0)
+  ];
 
   $("cascada").innerHTML = lineas.map(([n, v]) => `<div class="row" style="border:none;padding:4px 0">
     <div class="name">${esc(n)}</div>
