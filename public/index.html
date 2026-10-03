@@ -85,6 +85,9 @@
   .limr{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
   .limn{font-size:13px; font-weight:700; white-space:nowrap}
   .limsin{font-size:13px; color:var(--muted)}
+  .chk{display:flex; align-items:center; gap:6px; font-size:13px; color:var(--muted);
+    text-transform:none; letter-spacing:0; font-weight:400; margin:0 0 14px}
+  .chk input{width:auto; appearance:auto; padding:0; border-radius:3px}
   .lnk{background:none; border:none; color:var(--muted); font-size:13px; padding:4px;
     text-decoration:underline}
   .accrow{display:flex; align-items:baseline; gap:10px}
@@ -143,6 +146,7 @@
         <label for="fecha">Fecha</label>
         <input id="fecha" type="date">
       </div>
+      <label class="chk"><input type="checkbox" id="personal"> personal</label>
       <button class="primary" id="save">Guardar gasto</button>
       <p class="hint" id="hint"></p>
     </div>
@@ -164,6 +168,8 @@
       <div id="cascada"></div>
       <div id="pormedio"></div>
     </div>
+    <div class="sect">Cada uno</div>
+    <div class="card" id="cadauno"></div>
     <div class="sect" id="topes-sect" hidden>Topes</div>
     <div class="card" id="topesmes" hidden></div>
     <div class="sect" id="bandeja-sect" hidden>Sin categoría</div>
@@ -445,6 +451,18 @@ function renderMonth(){
   $("cascada").innerHTML = lineas.map(([n, v]) => `<div class="row" style="border:none;padding:4px 0">
     <div class="name">${esc(n)}</div>
     <div class="val mono" style="${v < 0 ? "color:var(--muted)" : ""}">${v < 0 ? "−" : ""}${fmt(Math.abs(v))}</div></div>`).join("");
+
+  // Cargar el gasto personal es opcional: si no cargaron nada, el bloque igual dice
+  // cuanto le toca a cada uno. El que no carga no queda en cero, queda sin registro.
+  $("cadauno").innerHTML = ["nico","dani"].map(q => {
+    const g = c.personal[q] || 0;
+    const sub = c.cadaUno > 0
+      ? (g ? `te quedan ${fmt(c.cadaUno - g)} de ${fmt(c.cadaUno)}` : `${fmt(c.cadaUno)} sin tocar`)
+      : (g ? `cargó ${fmt(g)}` : "este mes no hay presupuesto personal");
+    return `<div class="row q-${q}"><div class="name">${q === "nico" ? "Nico" : "Dani"}
+      <span class="sub">${sub}</span></div>
+      <div class="val mono">${c.cadaUno > 0 ? fmt(c.cadaUno - g) : fmt(g)}</div></div>`;
+  }).join("");
 
   $("topes-sect").hidden = $("topesmes").hidden = !c.topes.length;
   $("topesmes").innerHTML = c.topes
@@ -768,7 +786,8 @@ $("save").addEventListener("click", async () => {
     const row = await api("movs", "POST", {
       fecha: $("fecha").value, descripcion: $("desc").value.trim(), monto,
       cuenta_id: c.id, cuotas: c.tipo === "credito" ? +$("cuotas").value : 1, cat: $("cat").value,
-      quien: localStorage.getItem("quien") || "nico"
+      quien: localStorage.getItem("quien") || "nico",
+      ambito: $("personal").checked ? "personal" : null
     });
     movs.push(row);
     showErr("");
@@ -776,7 +795,7 @@ $("save").addEventListener("click", async () => {
     toast(r === null ? "Gasto guardado"
       : r >= 0 ? `Guardado · ${row.cat}: quedan ${fmt(r)}`
                : `Guardado · ${row.cat}: te pasaste ${fmt(-r)}`);
-    $("monto").value = ""; $("desc").value = ""; $("cuotas").value = "1";
+    $("monto").value = ""; $("desc").value = ""; $("cuotas").value = "1"; $("personal").checked = false;
     renderUltimos(); renderMonth(); $("monto").focus();
   } catch(e){ showErr("No se guardó: " + e.message); }
   renderLoad();
