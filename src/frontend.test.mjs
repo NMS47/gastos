@@ -68,6 +68,14 @@ const ESTADO_MOCK = {
     { id: "sv-srv2-2026-09", fecha: "2026-09-05", descripcion: "Gimnasio", monto: 8000,
       cuenta_id: "ef", cuotas: 1, cat: "Salud", quien: null, servicio_id: "srv2",
       estado: "omitido", creado: "2026-09-01T00:00:00.000Z", ambito: null },
+    // Gasto personal del mes corriente (fecha relativa a `hoy`, como los ingresos de
+    // arriba, para que caiga en el mismo mes sin importar cuándo corra el test). Ejercita
+    // el tag "personal" y el botón de borrar en #mlist, y que NO entre en Gastado ni en
+    // #pormedio (ver esFamiliar en renderMonth) — la regresión que este test tiene que
+    // dejar pisada.
+    { id: "m3", fecha: `${mesActual}-12`, descripcion: "Salida con amigos", monto: 7000,
+      cuenta_id: "ef", cuotas: 1, cat: null, quien: "nico", servicio_id: null, estado: null,
+      creado: "2026-09-12T10:00:00.000Z", ambito: "personal" },
   ],
   servicios: [
     { id: "srv1", nombre: "Netflix", monto: 4000, dia: 25, cuenta_id: "vi", cat: "Suscripciones",

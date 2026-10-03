@@ -61,6 +61,7 @@
   .tag.fijo{background:#E6F0EE; color:var(--accent)}
   .tag.venc{background:#FBEAE6; color:var(--danger)}
   .tag.pago{background:#E6F0EE; color:var(--accent)}
+  .tag.personal{color:var(--muted)}
   .dot{display:inline-block; width:7px; height:7px; border-radius:50%;
     background:var(--danger); margin-left:5px; vertical-align:middle}
   .pay{background:var(--accent); color:#fff; border:none; border-radius:8px;
@@ -351,11 +352,13 @@ const pendientesVencidos = () => movs.filter(m => m.estado === "pendiente" && m.
 // Los pendientes y los omitidos quedan afuera: el total del mes es plata que salió.
 const sumaAlTotal = m => !m.estado || m.estado === "pagado";
 
-// Personal no suma a ningún total FAMILIAR (Gastado, por medio de pago, Movimientos,
-// Ya comprometido en cuotas, Vencen este mes): la plata sigue saliendo de la cuenta —
-// por eso sumaAlTotal no cambia, y usoDeCuenta() de la tarjeta tampoco — pero no es
-// plata de la casa. No se usa en renderUltimos a propósito: "Últimos cargados" es la
-// lista de lo que se tipeó, no un total.
+// Personal no suma a ningún total FAMILIAR (Gastado, por medio de pago, Ya comprometido
+// en cuotas, Vencen este mes): la plata sigue saliendo de la cuenta — por eso sumaAlTotal
+// no cambia, y usoDeCuenta() de la tarjeta tampoco — pero no es plata de la casa.
+// Movimientos queda afuera de esta lista a propósito: no es un total, es la única vista
+// con botón de borrar, así que un gasto personal tiene que seguir apareciendo ahí (con
+// el tag "personal") para poder borrarlo. No se usa en renderUltimos tampoco: "Últimos
+// cargados" es la lista de lo que se tipeó, no un total.
 const esFamiliar = m => m.ambito !== "personal";
 
 function showErr(m){ $("err").textContent = m; $("err").hidden = !m; }
@@ -509,13 +512,14 @@ function renderMonth(){
       ${CATS.map(x => `<option>${x}</option>`).join("")}
     </select></div>`).join("");
 
-  const filas = [];
-  movs.filter(m => sumaAlTotal(m) && esFamiliar(m)).forEach(m => imp(m).forEach(i => { if(i.mes === key) filas.push({m, i}); }));
-  const total = filas.reduce((a,f) => a + f.i.monto, 0);
+  // Gastado y #pormedio son totales de la casa: solo lo familiar (ver esFamiliar).
+  const filasFam = [];
+  movs.filter(m => sumaAlTotal(m) && esFamiliar(m)).forEach(m => imp(m).forEach(i => { if(i.mes === key) filasFam.push({m, i}); }));
+  const total = filasFam.reduce((a,f) => a + f.i.monto, 0);
   $("mgastado").textContent = `Gastado: ${fmt(total)}`;
 
   const porC = {};
-  filas.forEach(f => porC[f.m.cuenta_id] = (porC[f.m.cuenta_id]||0) + f.i.monto);
+  filasFam.forEach(f => porC[f.m.cuenta_id] = (porC[f.m.cuenta_id]||0) + f.i.monto);
   $("pormedio").innerHTML = Object.entries(porC).sort((a,b) => b[1]-a[1]).map(([cid,v]) => {
     const cta = cuentas.find(x => x.id === cid) || {nombre:"?"};
     return `<div style="margin-top:12px"><div class="row" style="border:none;padding:0">
@@ -523,12 +527,19 @@ function renderMonth(){
       <div class="bar"><i style="width:${total ? v/total*100 : 0}%"></i></div></div>`;
   }).join("");
 
+  // Movimientos, en cambio, no es un total: es la única lista con botón de borrar
+  // (data-del), así que un gasto personal tiene que seguir apareciendo acá para poder
+  // borrarlo, aunque no suma a Gastado ni a #pormedio. Mismo criterio de mes que arriba
+  // (impactos()), sin el filtro esFamiliar.
+  const filas = [];
+  movs.filter(sumaAlTotal).forEach(m => imp(m).forEach(i => { if(i.mes === key) filas.push({m, i}); }));
   filas.sort((a,b) => a.m.fecha < b.m.fecha ? 1 : -1);
   $("mlist").innerHTML = filas.length ? filas.map(({m,i}) => {
     const cta = cuentas.find(x => x.id === m.cuenta_id) || {nombre:"?"};
     const cuota = i.de > 1 ? `<span class="tag">${i.nro}/${i.de}</span>` : "";
     const fijo = m.servicio_id ? `<span class="tag fijo">fijo</span>` : "";
-    return `<div class="row ${m.quien ? "q-"+m.quien : ""}"><div class="name">${esc(m.descripcion)}${cuota}${fijo}
+    const personal = m.ambito === "personal" ? `<span class="tag personal">personal</span>` : "";
+    return `<div class="row ${m.quien ? "q-"+m.quien : ""}"><div class="name">${esc(m.descripcion)}${cuota}${fijo}${personal}
       <span class="sub">${esc(cta.nombre)}${m.cat ? " · "+esc(m.cat) : ""} · comprado ${m.fecha.slice(8)}/${m.fecha.slice(5,7)}</span></div>
       <div class="val mono">${fmt(i.monto)}</div>
       <button class="del" data-del="${m.id}">borrar</button></div>`;
