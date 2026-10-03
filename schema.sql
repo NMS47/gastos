@@ -26,7 +26,9 @@ CREATE TABLE IF NOT EXISTS mov (
   quien       TEXT,             -- quién lo cargó: 'nico' o 'dani'
   servicio_id TEXT,             -- de qué servicio salió; NULL si es un gasto suelto
   estado      TEXT,             -- NULL para gastos comunes; 'pendiente'|'pagado'|'omitido'
-  creado      TEXT NOT NULL
+  creado      TEXT NOT NULL,
+  ambito      TEXT              -- 'personal' | NULL = familiar. No suma a ningún total
+                                 -- familiar ni consume tope. Eje distinto de `quien`.
 );
 
 CREATE INDEX IF NOT EXISTS idx_mov_fecha  ON mov(fecha);
@@ -42,11 +44,31 @@ CREATE TABLE IF NOT EXISTS servicio (
   modo      TEXT NOT NULL CHECK (modo IN ('auto','manual')),
   activo    INTEGER NOT NULL DEFAULT 1,
   desde     TEXT NOT NULL,      -- YYYY-MM, primer mes que corresponde
-  creado    TEXT NOT NULL
+  creado    TEXT NOT NULL,
+  hasta     TEXT                -- YYYY-MM, último mes que corresponde; NULL = sin fin.
+                                 -- Un compromiso (deuda, pago único) es un servicio con
+                                 -- `hasta`; no es lo mismo que `activo = 0` (ver CLAUDE.md).
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_mov_serv_mes
   ON mov(servicio_id, substr(fecha,1,7)) WHERE servicio_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS ingreso (
+  id      TEXT PRIMARY KEY,
+  nombre  TEXT NOT NULL,
+  monto   INTEGER NOT NULL,     -- lo que entra cada mes
+  dia     INTEGER,              -- día del mes que entra; solo informativo
+  desde   TEXT NOT NULL,        -- YYYY-MM, primer mes que cuenta
+  hasta   TEXT,                 -- YYYY-MM, último mes; NULL = sin fin. desde = hasta
+                                 -- es un ingreso eventual (p. ej. el aguinaldo)
+  activo  INTEGER NOT NULL DEFAULT 1,
+  creado  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS tope (
+  cat   TEXT PRIMARY KEY,       -- una categoría de CATS; sin fila = sin tope
+  monto INTEGER NOT NULL
+);
 
 -- Medios de pago iniciales. Borrá los que no uses desde la pestaña Medios.
 INSERT OR IGNORE INTO cuenta (id, nombre, tipo, cierre, venc, def) VALUES
