@@ -359,7 +359,7 @@ async function api(request, env) {
 
     // PUT y no POST: el tope está identificado por la categoría, así que poner un
     // tope es idempotente. Mandarlo dos veces no crea dos filas.
-    if (res === "topes" && rid && m === "PUT") {
+    if (res === "topes" && rid && !action && m === "PUT") {
       const b = await request.json();
       const cat = decodeURIComponent(rid).slice(0, 40);
       if (!cat) return json({ error: "Falta la categoría" }, 400);
@@ -371,7 +371,7 @@ async function api(request, env) {
       return json({ cat, monto });
     }
 
-    if (res === "topes" && rid && m === "DELETE") {
+    if (res === "topes" && rid && !action && m === "DELETE") {
       // Mismo .slice(0, 40) que el PUT: hay que borrar la clave que de verdad se
       // guardó, no la que llegó cruda en la URL.
       const cat = decodeURIComponent(rid).slice(0, 40);
