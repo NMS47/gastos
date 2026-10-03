@@ -1,6 +1,13 @@
 -- Presupuesto familiar: topes por categoría, ingresos, compromisos con fecha de fin
 -- y gasto personal opcional.
 --
+-- IMPORTANTE: esta migración tiene que aplicarse a producción ANTES de mergear esta
+-- rama a main. Cloudflare buildea solo con cada push a main, y en cuanto este branch
+-- llegue ahí GET /api/state y POST /api/movs van a tirar "no such table: ingreso" /
+-- "no such column: ambito" — la app muestra "No se pudieron cargar los datos" y nadie
+-- puede leer ni cargar nada hasta correr esto a mano. No se corrompe nada y es
+-- recuperable, pero es una caída real para dos personas que usan la app todos los días.
+--
 -- Backup obligatorio antes de correr (ALTER TABLE no se deshace en SQLite sin
 -- reconstruir la tabla):
 --   npx wrangler d1 export gastos --remote --output=backup-pre-presupuesto.sql

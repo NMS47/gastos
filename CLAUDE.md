@@ -23,7 +23,9 @@ migracion-quien.sql     ALTER TABLE suelto, ya aplicado
 migracion-servicios.sql tabla servicio + servicio_id/estado en mov, ya aplicado (2026-08-05)
 migracion-limites.sql   límites y bases en cuenta, ya aplicado (2026-08-06)
 migracion-presupuesto.sql  topes, ingresos, servicio.hasta, mov.ambito — TODAVÍA NO APLICADO
-  en producción, pendiente de correr a mano
+  en producción. TIENE QUE CORRERSE A MANO ANTES DE MERGEAR ESTA RAMA A MAIN: Cloudflare
+  buildea solo con cada push a main, y sin la migración GET /api/state y POST /api/movs
+  tiran error apenas esta rama llegue ahí.
 wrangler.toml           main + [assets] + binding D1 (DB) + secret PIN
 ```
 
