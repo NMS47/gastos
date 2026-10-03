@@ -257,6 +257,18 @@
         <label for="s-cat">Categoría <span style="text-transform:none;letter-spacing:0">(opcional)</span></label>
         <select id="s-cat"></select>
       </div>
+      <div class="field">
+        <label for="s-hasta">Dura para siempre?</label>
+        <select id="s-hasta">
+          <option value="">Sí, sigue todos los meses</option>
+          <option value="unico">No, es un pago único — termina este mes</option>
+          <option value="elegir">No, tiene fecha de fin</option>
+        </select>
+      </div>
+      <div class="field" id="f-s-hasta-mes" hidden>
+        <label for="s-hasta-mes">Hasta qué mes</label>
+        <input id="s-hasta-mes" type="month">
+      </div>
       <button class="primary" id="addserv">Agregar servicio</button>
       <p class="hint">Los que se debitan solos se cargan como gasto sin que hagas nada. Los que pagás vos te esperan con un botón para confirmar el monto real.</p>
     </div>
@@ -857,19 +869,32 @@ $("addacc").addEventListener("click", async () => {
   } catch(e){ showErr(e.message); }
 });
 
+$("s-hasta").addEventListener("change", e => {
+  $("f-s-hasta-mes").hidden = e.target.value !== "elegir";
+});
+
 $("addserv").addEventListener("click", async () => {
   const nombre = $("s-nom").value.trim();
   if(!nombre){ $("s-nom").focus(); return; }
   const monto = parseMonto($("s-monto").value);
   if(!monto){ $("s-monto").focus(); return; }
+  // "" (default) → sigue para siempre, hasta null, sin que el formulario pida nada
+  // más. "unico" → un pago que termina este mismo mes (desde = hasta, como la
+  // escritura). "elegir" → una deuda con fecha de fin real (como Mendoza), el mes
+  // sale del input que se reveló al elegir esta opción.
+  const modoHasta = $("s-hasta").value;
+  const hasta = modoHasta === "unico" ? hoyISO().slice(0,7)
+    : modoHasta === "elegir" ? $("s-hasta-mes").value
+    : null;
   try {
     const nuevo = await api("servicios", "POST", {
       nombre, monto, dia: +$("s-dia").value, cuenta_id: $("s-cuenta").value,
-      modo: $("s-modo").value, cat: $("s-cat").value
+      modo: $("s-modo").value, cat: $("s-cat").value, hasta
     });
     // De acá en adelante el servicio YA existe en el servidor. Nada de lo que siga
     // puede mostrarse como error: el usuario reintentaría y quedarían dos servicios.
     $("s-nom").value = ""; $("s-monto").value = "";
+    $("s-hasta").value = ""; $("f-s-hasta-mes").hidden = true; $("s-hasta-mes").value = "";
     // El alta ya generó (si correspondía) el gasto del mes: se recarga todo el estado
     // en vez de empujar solo el servicio, así el movimiento nuevo aparece en movs y la
     // fila se pinta bien sin esperar a un reload. Si la recarga falla, alcanza con el
