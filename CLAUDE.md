@@ -248,7 +248,12 @@ Es deliberadamente simple: son dos usuarios en una app familiar.
 ## Cosas pendientes / ideas
 
 - Editar el monto, la fecha o la descripción de un gasto ya cargado (hoy solo se puede
-  reclasificar `cat`/`ambito` desde la bandeja "Sin tope", o borrarlo).
+  reclasificar la categoría desde la bandeja "Sin categoría", o borrarlo).
+- Mover un gasto entre familiar y personal después de cargado. `PATCH /api/movs/:id` ya
+  acepta `ambito` — se agregó junto con `cat` pensando en este caso — pero ninguna pantalla
+  lo manda: el checkbox "personal" solo se lee al crear el gasto (`index.html`), y el
+  `<select>` de la bandeja solo envía `{ cat }`. Es barato: falta un control en la UI, no
+  el endpoint.
 - Editar un servicio ya creado desde la app (el `PATCH /api/servicios/:id` existe, falta
   la UI).
 - Reactivar un servicio dado de baja sin entrar a la base a mano.
