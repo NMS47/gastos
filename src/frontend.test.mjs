@@ -33,7 +33,7 @@ const pad2 = n => String(n).padStart(2, "0");
 const hoy = new Date();
 const mesActual = `${hoy.getFullYear()}-${pad2(hoy.getMonth() + 1)}`;
 const haceUnAnio = new Date(hoy.getFullYear() - 1, hoy.getMonth(), 1);
-const mesPasado = `${haceUnAnio.getFullYear()}-${pad2(haceUnAnio.getMonth() + 1)}`;
+const mesHaceUnAnio = `${haceUnAnio.getFullYear()}-${pad2(haceUnAnio.getMonth() + 1)}`;
 
 // Payload de /api/state, con los mismos nombres de columna que devuelve `SELECT *` en
 // src/index.js (ver schema.sql y migracion-presupuesto.sql: mov tiene `ambito`, servicio
@@ -82,11 +82,11 @@ const ESTADO_MOCK = {
   // categoría que ya no está en CATS, para ejercitar la etiqueta "vieja" que permite
   // sacarlo.
   ingresos: [
-    { id: "ing1", nombre: "Sueldo", monto: 1500000, dia: 5, desde: mesPasado, hasta: null,
+    { id: "ing1", nombre: "Sueldo", monto: 1500000, dia: 5, desde: mesHaceUnAnio, hasta: null,
       activo: 1, creado: "2026-01-01T00:00:00.000Z" },
     { id: "ing2", nombre: "Aguinaldo", monto: 700000, dia: 18, desde: mesActual, hasta: mesActual,
       activo: 1, creado: "2026-01-01T00:00:00.000Z" },
-    { id: "ing3", nombre: "Changa vieja", monto: 50000, dia: 1, desde: mesPasado, hasta: null,
+    { id: "ing3", nombre: "Changa vieja", monto: 50000, dia: 1, desde: mesHaceUnAnio, hasta: null,
       activo: 0, creado: "2026-01-01T00:00:00.000Z" },
   ],
   topes: [
