@@ -137,6 +137,7 @@
       <div class="field">
         <label for="cat">Categoría <span style="text-transform:none;letter-spacing:0">(opcional)</span></label>
         <select id="cat"></select>
+        <p class="hint" id="cathint"></p>
       </div>
       <div class="field">
         <label for="fecha">Fecha</label>
@@ -308,7 +309,7 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { impactos, ym, vigenteEn, cascada, anchoBarra } from "./calculo.mjs";
+import { impactos, ym, vigenteEn, cascada, anchoBarra, consumos } from "./calculo.mjs";
 const CATS = ["Supermercado","Comida afuera","Auto","Transporte","Servicios",
   "Alquiler / Expensas","Hogar","Salud","Deudas","Educación","Ropa","Viajes",
   "Ocio / Paseo","Suscripciones","Regalos","Impuestos","Mascotas","Otros"];
@@ -380,6 +381,14 @@ function fillSelects(){
     $("s-cat").innerHTML = `<option value="">—</option>` + CATS.map(c=>`<option>${c}</option>`).join("");
 }
 
+// Cuanto queda del tope de una categoria en el mes de la fecha que se esta cargando.
+// null si esa categoria no tiene tope.
+function restante(cat, mes){
+  const t = topes.find(x => x.cat === cat);
+  if(!t) return null;
+  return t.monto - (consumos(movs, mes)[cat] || 0);
+}
+
 function renderLoad(){
   const c = cuentas.find(x => x.id === $("cuenta").value);
   const esCred = c && c.tipo === "credito";
@@ -394,6 +403,12 @@ function renderLoad(){
       : `Entra en el resumen de <b>${MESES[+mm-1]} ${y}</b>.`;
   } else $("hint").textContent = "";
   $("save").disabled = !(monto > 0);
+
+  const cat = $("cat").value;
+  const r = cat ? restante(cat, ($("fecha").value || hoyISO()).slice(0,7)) : null;
+  $("cathint").textContent = r === null ? ""
+    : r >= 0 ? `${cat} · quedan ${fmt(r)}`
+             : `${cat} · ya te pasaste ${fmt(-r)}`;
 }
 
 function renderUltimos(){
@@ -742,6 +757,7 @@ async function boot(){
   $(id).addEventListener("input", renderLoad);
   $(id).addEventListener("change", renderLoad);
 });
+$("cat").addEventListener("change", renderLoad);
 
 $("save").addEventListener("click", async () => {
   const monto = parseMonto($("monto").value);
@@ -755,7 +771,11 @@ $("save").addEventListener("click", async () => {
       quien: localStorage.getItem("quien") || "nico"
     });
     movs.push(row);
-    showErr(""); toast("Gasto guardado");
+    showErr("");
+    const r = row.cat ? restante(row.cat, row.fecha.slice(0,7)) : null;
+    toast(r === null ? "Gasto guardado"
+      : r >= 0 ? `Guardado · ${row.cat}: quedan ${fmt(r)}`
+               : `Guardado · ${row.cat}: te pasaste ${fmt(-r)}`);
     $("monto").value = ""; $("desc").value = ""; $("cuotas").value = "1";
     renderUltimos(); renderMonth(); $("monto").focus();
   } catch(e){ showErr("No se guardó: " + e.message); }
