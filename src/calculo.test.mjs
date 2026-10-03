@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { impactos, ym, vigenteEn, consumos } from "../public/calculo.mjs";
-import { cascada as _cascada, movsDelMes, anchoBarra, parseMonto } from "../public/calculo.mjs";
+import { cascada as _cascada, movsDelMes, anchoBarra, parseMonto, fmt } from "../public/calculo.mjs";
 
 const visa = { id: "v", tipo: "credito", cierre: 20 };
 const efectivo = { id: "e", tipo: "debito" };
@@ -362,4 +362,25 @@ test("parseMonto: un negativo da 0", () => {
 test("parseMonto: null y undefined dan 0", () => {
   assert.equal(parseMonto(null), 0);
   assert.equal(parseMonto(undefined), 0);
+});
+
+test("fmt: un monto positivo lleva el simbolo antes del numero", () => {
+  assert.equal(fmt(200000), "$200.000");
+});
+
+test("fmt: cero no lleva signo", () => {
+  assert.equal(fmt(0), "$0");
+});
+
+test("fmt: un monto negativo lleva el signo antes del simbolo", () => {
+  assert.equal(fmt(-200000), "-$200.000");
+});
+
+test("fmt: redondea antes de formatear", () => {
+  assert.equal(fmt(199999.6), "$200.000");
+  assert.equal(fmt(-199999.6), "-$200.000");
+});
+
+test("fmt: los miles separan con punto, como es-AR", () => {
+  assert.equal(fmt(1700000), "$1.700.000");
 });

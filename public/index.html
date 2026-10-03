@@ -315,7 +315,7 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { impactos, ym, vigenteEn, cascada, anchoBarra, consumos, parseMonto } from "./calculo.mjs";
+import { impactos, ym, vigenteEn, cascada, anchoBarra, consumos, parseMonto, fmt } from "./calculo.mjs";
 const CATS = ["Supermercado","Comida afuera","Auto","Transporte","Servicios",
   "Alquiler / Expensas","Hogar","Salud","Deudas","Educación","Ropa","Viajes",
   "Ocio / Paseo","Suscripciones","Regalos","Impuestos","Mascotas","Otros"];
@@ -324,7 +324,6 @@ const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto"
 
 let cuentas = [], movs = [], servicios = [], ingresos = [], topes = [], cursor = new Date();
 const $ = id => document.getElementById(id);
-const fmt = n => "$" + Math.round(n).toLocaleString("es-AR");
 const esc = s => String(s).replace(/[<>&]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
 
 const nombreCuenta = cid => (cuentas.find(x => x.id === cid) || {nombre:"?"}).nombre;

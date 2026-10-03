@@ -171,3 +171,12 @@ export function parseMonto(v) {
   const n = parseFloat(s);
   return isFinite(n) && n > 0 ? n : 0;
 }
+
+// El signo va antes del simbolo de pesos, no entre el simbolo y el numero: "-$200.000",
+// no "$-200.000". El numero mas importante de la cascada (cuanto queda para repartir)
+// se vuelve negativo justo cuando el mes no cubre sus compromisos, asi que es lo primero
+// que ve alguien en ese caso, y "$-200.000" lee como un error de la app.
+export function fmt(n) {
+  const r = Math.round(n);
+  return (r < 0 ? "-$" : "$") + Math.abs(r).toLocaleString("es-AR");
+}
