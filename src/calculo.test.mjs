@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { impactos, ym, vigenteEn, consumos } from "../public/calculo.mjs";
-import { cascada as _cascada, movsDelMes } from "../public/calculo.mjs";
+import { cascada as _cascada, movsDelMes, anchoBarra } from "../public/calculo.mjs";
 
 const visa = { id: "v", tipo: "credito", cierre: 20 };
 const efectivo = { id: "e", tipo: "debito" };
@@ -307,4 +307,14 @@ test("cascada: un gasto personal sin quien se agrupa bajo nico", () => {
   assert.deepEqual(Object.keys(c.personal).sort(), ["dani", "nico"]);
   assert.equal(c.personal.nico, 100);
   assert.equal(c.personal.dani, 0);
+});
+
+test("anchoBarra: un tope en 0 no da NaN", () => {
+  assert.equal(anchoBarra(0, 0), 0);
+  assert.equal(anchoBarra(100, 0), 100);
+});
+
+test("anchoBarra: nunca pasa de 100", () => {
+  assert.equal(anchoBarra(50, 100), 50);
+  assert.equal(anchoBarra(500, 100), 100);
 });

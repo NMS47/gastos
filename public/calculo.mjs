@@ -147,3 +147,10 @@ export function cascada({ movs, cuentas, ingresos, servicios, topes }, mes, mesC
   return { ingresos: total, tarjeta, sinTope, totalSinTope,
            topes: conTope, totalTopes, sinCategoria, queda, cadaUno, personal };
 }
+
+// Ancho de una barra en porcentaje. Un tope en 0 significa "no se toca": la barra
+// va llena si hubo consumo y vacia si no, en vez de dividir por cero.
+export function anchoBarra(consumido, tope) {
+  if (!tope) return consumido > 0 ? 100 : 0;
+  return Math.min(100, Math.round(consumido / tope * 100));
+}

@@ -163,6 +163,8 @@
       <div id="cascada"></div>
       <div id="pormedio"></div>
     </div>
+    <div class="sect" id="topes-sect" hidden>Topes</div>
+    <div class="card" id="topesmes" hidden></div>
     <div class="sect">Movimientos</div>
     <div class="card" id="mlist"></div>
     <div class="sect" id="pend-sect" hidden>Vencen este mes</div>
@@ -304,7 +306,7 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { impactos, ym, vigenteEn, cascada } from "./calculo.mjs";
+import { impactos, ym, vigenteEn, cascada, anchoBarra } from "./calculo.mjs";
 const CATS = ["Supermercado","Comida afuera","Auto","Transporte","Servicios",
   "Alquiler / Expensas","Hogar","Salud","Deudas","Educación","Ropa","Viajes",
   "Ocio / Paseo","Suscripciones","Regalos","Impuestos","Mascotas","Otros"];
@@ -426,6 +428,20 @@ function renderMonth(){
   $("cascada").innerHTML = lineas.map(([n, v]) => `<div class="row" style="border:none;padding:4px 0">
     <div class="name">${esc(n)}</div>
     <div class="val mono" style="${v < 0 ? "color:var(--muted)" : ""}">${v < 0 ? "−" : ""}${fmt(Math.abs(v))}</div></div>`).join("");
+
+  $("topes-sect").hidden = $("topesmes").hidden = !c.topes.length;
+  $("topesmes").innerHTML = c.topes
+    .slice().sort((a,b) => b.tope - a.tope)
+    .map(t => {
+      const resto = t.tope - t.consumido;
+      const paso = resto < 0;
+      return `<div style="margin-top:12px" data-tope="${esc(t.cat)}">
+        <div class="row" style="border:none;padding:0">
+          <div class="name">${esc(t.cat)}</div>
+          <div class="val mono">${fmt(t.consumido)} / ${fmt(t.tope)}</div></div>
+        <div class="bar"><i class="${paso ? "alerta" : ""}" style="width:${anchoBarra(t.consumido, t.tope)}%"></i></div>
+        <div class="sub">${paso ? "te pasaste " + fmt(-resto) : "quedan " + fmt(resto)}</div></div>`;
+    }).join("");
 
   const filas = [];
   movs.filter(sumaAlTotal).forEach(m => imp(m).forEach(i => { if(i.mes === key) filas.push({m, i}); }));
@@ -904,6 +920,30 @@ $("topes-list").addEventListener("change", async e => {
       toast("Tope guardado");
     }
     renderPlan(); renderMonth();
+  } catch(err){ showErr("No se guardó: " + err.message); }
+});
+
+// Tocar una barra edita ese tope ahi mismo: es donde uno se da cuenta de que esta mal.
+// El string del prompt se mira vacio/no-vacio ANTES de parsear: parseMonto devuelve 0
+// tanto para "" como para "0", y un tope en 0 es real (ver anchoBarra) — si mirara el
+// monto ya parseado, poner la categoria en 0 borraria el tope en vez de fijarlo.
+$("topesmes").addEventListener("click", async e => {
+  const box = e.target.closest("[data-tope]"); if(!box) return;
+  const cat = box.dataset.tope;
+  const actual = topes.find(t => t.cat === cat);
+  const v = prompt(`Tope de ${cat}`, actual ? actual.monto : "");
+  if(v === null) return;
+  const s = v.trim();
+  try {
+    if(!s){
+      await api("topes/" + encodeURIComponent(cat), "DELETE");
+      topes = topes.filter(t => t.cat !== cat);
+    } else {
+      const row = await api("topes/" + encodeURIComponent(cat), "PUT", { monto: parseMonto(s) });
+      const i = topes.findIndex(t => t.cat === cat);
+      if(i >= 0) topes[i] = row; else topes.push(row);
+    }
+    toast("Tope actualizado"); renderMonth(); renderPlan();
   } catch(err){ showErr("No se guardó: " + err.message); }
 });
 
