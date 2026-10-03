@@ -975,6 +975,8 @@ $("i-save").addEventListener("click", async () => {
 
 $("ingresos-list").addEventListener("click", async e => {
   const iid = e.target.dataset.rmi; if(!iid) return;
+  const ing = ingresos.find(i => i.id === iid);
+  if(!confirm(`¿Borrar el ingreso ${ing ? ing.nombre + " de " + fmt(ing.monto) : ""}? Se pierde el desde con el que se cargó.`)) return;
   try {
     await api("ingresos/" + iid, "DELETE");
     ingresos = ingresos.filter(i => i.id !== iid);
