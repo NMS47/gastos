@@ -81,11 +81,12 @@ async function api(request, env) {
         cuotas: Math.min(Math.max(parseInt(b.cuotas) || 1, 1), 60),
         cat: b.cat || null,
         quien: b.quien === "dani" ? "dani" : "nico",
+        ambito: b.ambito === "personal" ? "personal" : null,
         creado: new Date().toISOString()
       };
       await env.DB.prepare(
-        "INSERT INTO mov (id,fecha,descripcion,monto,cuenta_id,cuotas,cat,quien,creado) VALUES (?,?,?,?,?,?,?,?,?)"
-      ).bind(row.id, row.fecha, row.descripcion, row.monto, row.cuenta_id, row.cuotas, row.cat, row.quien, row.creado).run();
+        "INSERT INTO mov (id,fecha,descripcion,monto,cuenta_id,cuotas,cat,quien,ambito,creado) VALUES (?,?,?,?,?,?,?,?,?,?)"
+      ).bind(row.id, row.fecha, row.descripcion, row.monto, row.cuenta_id, row.cuotas, row.cat, row.quien, row.ambito, row.creado).run();
       return json(row, 201);
     }
 
@@ -114,6 +115,24 @@ async function api(request, env) {
       }
       await env.DB.prepare("DELETE FROM mov WHERE id = ?").bind(rid).run();
       return json({ ok: true });
+    }
+
+    // Acotado a cat y ambito: reclasificar, no editar. El monto, la fecha y la
+    // descripcion siguen sin poder cambiarse (ver "Fuera de alcance" en la spec).
+    // En un gasto generado por un servicio esto afecta solo esa fila: el mes que
+    // viene se genera con la cat del servicio, igual que pasa con el monto.
+    if (res === "movs" && rid && !action && m === "PATCH") {
+      const b = await request.json();
+      const actual = await env.DB.prepare("SELECT * FROM mov WHERE id = ?").bind(rid).first();
+      if (!actual) return json({ error: "Gasto inexistente" }, 404);
+
+      const cat = b.cat === undefined ? actual.cat : (b.cat || null);
+      const ambito = b.ambito === undefined ? actual.ambito
+        : (b.ambito === "personal" ? "personal" : null);
+
+      await env.DB.prepare("UPDATE mov SET cat=?, ambito=? WHERE id=?")
+        .bind(cat, ambito, rid).run();
+      return json({ ...actual, cat, ambito });
     }
 
     if (res === "cuentas" && !rid && m === "POST") {
