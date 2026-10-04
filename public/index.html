@@ -56,6 +56,12 @@
   .row .name{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .row .sub{display:block; font-size:12px; color:var(--muted); margin-top:3px}
   .row .val{font-weight:700; white-space:nowrap}
+  /* Un input o un select adentro de una .row no puede llevarse la fila entera. La regla
+     global de arriba les pone width:100%, y como .name es flex:1 con min-width:0, se
+     encoge a cero y el nombre de la categoría desaparece: quedan solo los campos. */
+  .row input,.row select{width:auto; flex:none; padding:10px 12px}
+  .row input.tope-in{width:122px; text-align:right}
+  .row select{max-width:42%}
   .tag{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.06em;
     padding:2px 6px; border-radius:5px; background:#EDEDF8; color:var(--credit); margin-left:6px}
   .tag.fijo{background:#E6F0EE; color:var(--accent)}
